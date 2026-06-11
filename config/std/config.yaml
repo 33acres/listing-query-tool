@@ -1,0 +1,92 @@
+# =========================================================
+# Scenario Revenue Analyzer ── STD（CUREAオンライン性病外来）
+# 確定値。Codexはハードコードせず本ファイルを読むこと。
+# 出典: タグ命名規則_友だち追加シナリオv1.md / 料金.md
+# =========================================================
+project: std
+display_name: CUREA オンライン性病外来
+
+flow:
+  new_flow_start: "2026-04-29"
+
+ingest:
+  encoding: auto
+  source: lstep_friends
+
+drop_pii:
+  - "表示名"
+
+column_mapping:
+  user_id: "ID"
+  mark: "対応マーク"
+  added_at: "友だち追加日時"
+  last_action_at: "最終アクション日"
+  applied_via_step: "申込経由STEP"
+
+# --- STEP0分岐タグ ------------------------------------------
+branch_tags:
+  treat: "STEP0_治療希望"       # 申込フローへ
+  test: "STEP0_検査希望"        # 検査キットシナリオへ（STEP1-6から除外）
+
+# --- CTA / STEP タグ（追記式）------------------------------
+tags:
+  step0a: "診察誘導_STEP0A"
+  step1: "診察誘導_STEP1"
+  step2: "診察誘導_STEP2"
+  step3: "診察誘導_STEP3"
+  step4: "診察誘導_STEP4"
+  step5: "診察誘導_STEP5"
+  step6: "診察誘導_STEP6"
+  faq1: "診察誘導_FAQ1"
+  faq2: "診察誘導_FAQ2"
+  shina_read: "シナ読了_対象"    # STEP6到達・未決済（再アプローチ）
+
+# --- 共通フローのステータスタグ（実在確認済み）--------------
+status_tags:
+  paid: "決済済み"
+  monshin_submitted: "問診票提出済み"
+  shinsatsu_done: "診察完了"
+status_rules:
+  shipped_marks: ["発送済"]
+  # 要フォロー層 = paid AND NOT monshin_submitted（タグ論理で導出）
+
+# --- 購入タグ（商品レベル識別はTBD・§10）-------------------
+purchase_tags: TBD
+# 暫定: 商品識別不可のため、決済済み数 × 基本線(治療薬) または平均単価で概算。
+
+# --- 単価（税込・確定）。原価判明＝粗利算出可（将来）---------
+pricing:
+  treat_drug: 8140              # 性病治療薬（ジスロマック等）
+  test_female_10: 28000         # 女性10項目/フルセット
+  test_female_8: 19000          # 女性8項目/スタンダード
+  test_female_6: 15000          # 女性6項目/ベーシック
+  test_female_2: 9900           # 女性2項目/ライト
+  test_male_10: 28000           # 男性10項目/フルセット
+  test_male_7: 19000            # 男性7項目/スタンダード
+  test_male_5: 15000            # 男性5項目/ベーシック
+  test_male_2: 9900             # 男性2項目/ライト
+cost:                           # 原価(税込)・粗利計算用（将来）
+  treat_drug: 1034
+  test_female_10: 8309
+  test_female_8: 6527
+  test_female_6: 5367
+  test_female_2: 4049
+  test_male_10: 8309
+  test_male_7: 6587
+  test_male_5: 5367
+  test_male_2: 4049
+  shipping: 310
+  packaging: 20
+  payment_fee_rate: 0.0265      # VISA/MASTER 2.65%
+
+# --- 評価対象シナリオ --------------------------------------
+scenarios:
+  - "【登録時】新フロー対応 友だち追加シナリオ（2026/05/27）_登録直後・15分後"
+  - "新フロー対応 友だち追加シナリオ（2026/05/27）_時刻指定21時"
+
+ads:
+  source: google_ads
+  protected_words: ["指名"]
+
+scoring:
+  scenario: { cvr: 35, ctr: 20, revenue: 25, cv_speed: 10, block: 0 }
