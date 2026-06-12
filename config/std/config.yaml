@@ -41,14 +41,21 @@ tags:
   faq2: "診察誘導_FAQ2"
   shina_read: "シナ読了_対象"    # STEP6到達・未決済（再アプローチ）
 
-# --- 共通フローのステータスタグ（実在確認済み）--------------
-status_tags:
-  paid: "決済済み"
-  monshin_submitted: "問診票提出済み"
-  shinsatsu_done: "診察完了"
+# --- ステータス計測（2026-06-11 Lステップ設定調査反映）------
+status_availability:
+  paid: unavailable
+  monshin_submitted: unavailable
+  shinsatsu_done: unavailable
+  shipped: unavailable
+  needs_follow: unavailable
+status_notes:
+  paid: "決済後シナリオにタグ追加がないため未計測"
+  monshin_submitted: "回答フォームにタグ追加がないため未計測"
+  shinsatsu_done: "診察完了シナリオにアクション設定がないため未計測"
+  shipped: "発送テンプレートにタグ追加がないため未計測"
+  needs_follow: "決済完了・問診提出の両ステータスが未計測のため算出不可"
 status_rules:
-  shipped_marks: ["発送済"]
-  # 要フォロー層 = paid AND NOT monshin_submitted（タグ論理で導出）
+  shipped_marks: []
 
 # --- 購入タグ（商品レベル識別はTBD・§10）-------------------
 purchase_tags: TBD

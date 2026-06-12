@@ -290,7 +290,9 @@ export function AnalyzerClient({ config }: Props) {
                   <div className="rounded-xl bg-amber-50 px-3 py-2 text-right">
                     <p className="text-xs font-semibold text-amber-800">要フォロー</p>
                     <p className="text-xl font-bold text-amber-950">
-                      {result.funnel.needsFollowCount}人
+                      {result.funnel.needsFollowCount === null
+                        ? "未計測"
+                        : `${result.funnel.needsFollowCount}人`}
                     </p>
                   </div>
                 </div>
@@ -338,10 +340,10 @@ export function AnalyzerClient({ config }: Props) {
                       aria-hidden="true"
                     />
                     <div>
-                      <h2 className="font-bold text-amber-950">TBDの扱い</h2>
+                      <h2 className="font-bold text-amber-950">計測状況</h2>
                       <p className="mt-2 text-sm leading-6 text-amber-900">
-                        dayvigoの診察完了はconfig未確定のため未計測です。問診票提出は
-                        status_rulesの暫定マークだけで判定しています。
+                        取得できない指標は0件ではなく「未計測」と表示します。判定方法は
+                        configのstatus_availability / status_rulesで切り替えられます。
                       </p>
                     </div>
                   </div>
@@ -424,7 +426,9 @@ export function AnalyzerClient({ config }: Props) {
                           {formatRate(week.teikiRate)}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums">
-                          {week.needsFollow}
+                          {week.needsFollow === null
+                            ? "未計測"
+                            : week.needsFollow}
                         </td>
                       </tr>
                     ))}

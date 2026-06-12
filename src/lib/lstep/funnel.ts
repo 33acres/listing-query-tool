@@ -11,6 +11,15 @@ function rate(numerator: number | null, denominator: number | null): number | nu
   return numerator / denominator;
 }
 
+function countMeasured(
+  friends: LstepFriend[],
+  read: (friend: LstepFriend) => boolean | null,
+): number | null {
+  return friends.some((friend) => read(friend) !== null)
+    ? friends.filter((friend) => read(friend) === true).length
+    : null;
+}
+
 export function buildFunnel(
   allFriends: LstepFriend[],
   config: AnalyzerConfig,
@@ -28,16 +37,16 @@ export function buildFunnel(
     paymentClick: friends.filter(
       (friend) => friend.paymentClicks.tanpin || friend.paymentClicks.teiki,
     ).length,
-    paid: friends.filter((friend) => friend.status.paid).length,
-    monshinSubmitted: friends.filter(
+    paid: countMeasured(friends, (friend) => friend.status.paid),
+    monshinSubmitted: countMeasured(
+      friends,
       (friend) => friend.status.monshinSubmitted,
-    ).length,
-    shinsatsuDone: friends.some(
-      (friend) => friend.status.shinsatsuDone !== null,
-    )
-      ? friends.filter((friend) => friend.status.shinsatsuDone).length
-      : null,
-    shipped: friends.filter((friend) => friend.status.shipped).length,
+    ),
+    shinsatsuDone: countMeasured(
+      friends,
+      (friend) => friend.status.shinsatsuDone,
+    ),
+    shipped: countMeasured(friends, (friend) => friend.status.shipped),
   };
 
   const definitions: Array<{
@@ -50,15 +59,32 @@ export function buildFunnel(
     { key: "started", label: "診察スタート", count: counts.started },
     { key: "step1", label: "STEP1到達", count: counts.step1 },
     { key: "paymentClick", label: "決済クリック", count: counts.paymentClick },
-    { key: "paid", label: "決済完了", count: counts.paid },
-    { key: "monshinSubmitted", label: "問診票提出", count: counts.monshinSubmitted },
+    {
+      key: "paid",
+      label: "決済完了",
+      count: counts.paid,
+      note: config.status_notes?.paid,
+    },
+    {
+      key: "monshinSubmitted",
+      label: "問診票提出",
+      count: counts.monshinSubmitted,
+      note: config.status_notes?.monshin_submitted,
+    },
     {
       key: "shinsatsuDone",
       label: "ビデオ診察完了",
       count: counts.shinsatsuDone,
-      note: counts.shinsatsuDone === null ? "TBD: config確定まで未計測" : undefined,
+      note:
+        config.status_notes?.shinsatsu_done ??
+        (counts.shinsatsuDone === null ? "未計測" : undefined),
     },
-    { key: "shipped", label: "発送済", count: counts.shipped },
+    {
+      key: "shipped",
+      label: "発送済",
+      count: counts.shipped,
+      note: config.status_notes?.shipped,
+    },
   ];
 
   const steps = definitions.map((definition, index) => {
@@ -74,6 +100,9 @@ export function buildFunnel(
 
   return {
     steps,
-    needsFollowCount: friends.filter((friend) => friend.status.needsFollow).length,
+    needsFollowCount: countMeasured(
+      friends,
+      (friend) => friend.status.needsFollow,
+    ),
   };
 }

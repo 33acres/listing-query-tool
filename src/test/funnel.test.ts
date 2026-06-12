@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFunnel } from "@/lib/lstep/funnel";
 import { mapColumns } from "@/lib/normalize/mapColumns";
 import { normalizeFriends } from "@/lib/normalize/normalizeFriends";
+import type { AnalyzerConfig } from "@/types/lstep";
 import { dayvigoConfig, headers } from "./lstepFixtures";
 
 describe("buildFunnel", () => {
@@ -51,5 +52,40 @@ describe("buildFunnel", () => {
     expect(count("shinsatsuDone")).toBeNull();
     expect(count("shipped")).toBe(1);
     expect(result.needsFollowCount).toBe(1);
+  });
+
+  it("計測不能と設定されたステータスを0件ではなく未計測にする", () => {
+    const config: AnalyzerConfig = {
+      ...dayvigoConfig,
+      status_availability: {
+        monshin_submitted: "unavailable",
+        needs_follow: "unavailable",
+      },
+      status_notes: {
+        monshin_submitted: "回答フォームにタグ付与なし",
+      },
+    };
+    const rows = [
+      {
+        ID: "1",
+        表示名: "破棄対象",
+        対応マーク: "",
+        友だち追加日時: "2026-05-01 10:00:00",
+      },
+    ];
+    const normalized = normalizeFriends(
+      rows,
+      headers,
+      config,
+      mapColumns(config),
+    );
+    const result = buildFunnel(normalized.friends, config);
+    const monshin = result.steps.find(
+      (step) => step.key === "monshinSubmitted",
+    );
+
+    expect(monshin?.count).toBeNull();
+    expect(monshin?.note).toBe("回答フォームにタグ付与なし");
+    expect(result.needsFollowCount).toBeNull();
   });
 });

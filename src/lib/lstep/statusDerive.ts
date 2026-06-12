@@ -11,6 +11,13 @@ function includes(values: string[] | undefined, target: string): boolean {
   return (values ?? []).includes(target);
 }
 
+function isAvailable(
+  config: AnalyzerConfig,
+  key: keyof NonNullable<AnalyzerConfig["status_availability"]>,
+): boolean {
+  return config.status_availability?.[key] !== "unavailable";
+}
+
 export function deriveStatus(
   input: StatusInput,
   config: AnalyzerConfig,
@@ -30,20 +37,27 @@ export function deriveStatus(
   const shinsatsuMeasured =
     Boolean(config.status_tags?.shinsatsu_done) || configuredShinsatsuMarks.length > 0;
 
-  const paid =
-    paidByTag ||
-    input.purchases.size > 0 ||
-    includes(config.status_rules.paid_marks, input.mark);
-  const monshinSubmitted =
-    monshinByTag ||
-    includes(config.status_rules.monshin_submitted_marks, input.mark);
-  const shinsatsuDone = shinsatsuMeasured
+  const paid = isAvailable(config, "paid")
+    ? paidByTag ||
+      input.purchases.size > 0 ||
+      includes(config.status_rules.paid_marks, input.mark)
+    : null;
+  const monshinSubmitted = isAvailable(config, "monshin_submitted")
+    ? monshinByTag ||
+      includes(config.status_rules.monshin_submitted_marks, input.mark)
+    : null;
+  const shinsatsuDone = isAvailable(config, "shinsatsu_done") && shinsatsuMeasured
     ? shinsatsuByTag || configuredShinsatsuMarks.includes(input.mark)
     : null;
-  const shipped = includes(config.status_rules.shipped_marks, input.mark);
-  const needsFollow =
-    config.project === "std"
-      ? paid && !monshinSubmitted
+  const shipped = isAvailable(config, "shipped")
+    ? includes(config.status_rules.shipped_marks, input.mark)
+    : null;
+  const needsFollow = !isAvailable(config, "needs_follow")
+    ? null
+    : config.project === "std"
+      ? paid !== null && monshinSubmitted !== null
+        ? paid && !monshinSubmitted
+        : null
       : includes(config.status_rules.needs_follow_marks, input.mark);
 
   return {

@@ -10,6 +10,8 @@ export interface StatusRules {
   shinsatsu_done?: string | string[];
 }
 
+export type MeasurementAvailability = "derived" | "unavailable";
+
 export interface AnalyzerConfig {
   project: ProjectName;
   display_name: string;
@@ -35,6 +37,18 @@ export interface AnalyzerConfig {
   purchase_tags: Record<PurchaseKey, string> | "TBD";
   pricing: Record<PurchaseKey, number>;
   status_rules: StatusRules;
+  status_availability?: Partial<
+    Record<
+      "paid" | "monshin_submitted" | "shinsatsu_done" | "shipped" | "needs_follow",
+      MeasurementAvailability
+    >
+  >;
+  status_notes?: Partial<
+    Record<
+      "paid" | "monshin_submitted" | "shinsatsu_done" | "shipped" | "needs_follow",
+      string
+    >
+  >;
   scenarios: string[];
   ads: {
     source: string;
@@ -46,11 +60,11 @@ export interface AnalyzerConfig {
 }
 
 export interface FriendStatus {
-  paid: boolean;
-  monshinSubmitted: boolean;
+  paid: boolean | null;
+  monshinSubmitted: boolean | null;
   shinsatsuDone: boolean | null;
-  shipped: boolean;
-  needsFollow: boolean;
+  shipped: boolean | null;
+  needsFollow: boolean | null;
 }
 
 export interface LstepFriend {
@@ -88,7 +102,7 @@ export interface FunnelStep {
 
 export interface FunnelResult {
   steps: FunnelStep[];
-  needsFollowCount: number;
+  needsFollowCount: number | null;
 }
 
 export interface KpiPeriod {
@@ -116,7 +130,7 @@ export interface WeeklyLogEntry {
   registrations: number;
   paid: number;
   teikiRate: number | null;
-  needsFollow: number;
+  needsFollow: number | null;
 }
 
 export interface AnalysisResult {

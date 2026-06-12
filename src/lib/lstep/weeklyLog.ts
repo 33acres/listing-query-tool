@@ -23,13 +23,19 @@ export function buildWeeklyLog(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([weekStart, weeklyFriends]) => {
       const teiki = buildTeikiRate(weeklyFriends, config);
+      const needsFollowMeasured = weeklyFriends.some(
+        (friend) => friend.status.needsFollow !== null,
+      );
       return {
         weekStart,
         registrations: weeklyFriends.length,
         paid: teiki.total,
         teikiRate: teiki.rate,
-        needsFollow: weeklyFriends.filter((friend) => friend.status.needsFollow)
-          .length,
+        needsFollow: needsFollowMeasured
+          ? weeklyFriends.filter(
+              (friend) => friend.status.needsFollow === true,
+            ).length
+          : null,
       };
     });
 }
