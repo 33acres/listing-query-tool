@@ -43,35 +43,35 @@ tags:
 
 # --- ステータス計測（2026-06-11 Lステップ設定調査反映）------
 status_availability:
-  paid: unavailable
+  paid: derived
   monshin_submitted: unavailable
   shinsatsu_done: unavailable
   shipped: unavailable
   needs_follow: unavailable
 status_notes:
-  paid: "決済後シナリオにタグ追加がないため未計測"
+  paid: "購入後に付与される商品タグから導出"
   monshin_submitted: "回答フォームにタグ追加がないため未計測"
   shinsatsu_done: "診察完了シナリオにアクション設定がないため未計測"
   shipped: "発送テンプレートにタグ追加がないため未計測"
-  needs_follow: "決済完了・問診提出の両ステータスが未計測のため算出不可"
+  needs_follow: "問診票提出が未計測のため算出不可"
 status_rules:
   shipped_marks: []
 
-# --- 購入タグ（商品レベル識別はTBD・§10）-------------------
-purchase_tags: TBD
-# 暫定: 商品識別不可のため、決済済み数 × 基本線(治療薬) または平均単価で概算。
+# --- 購入タグ（2026-06-13 Lステップ発火履歴で確認）----------
+purchase_tags:
+  treat_drug: "性感染症治療薬"
+  test_full: "フルセット"
+  test_standard: "スタンダードセット"
+  test_basic: "ベーシックセット"
+  test_light: "ライトセット"
 
 # --- 単価（税込・確定）。原価判明＝粗利算出可（将来）---------
 pricing:
   treat_drug: 8140              # 性病治療薬（ジスロマック等）
-  test_female_10: 28000         # 女性10項目/フルセット
-  test_female_8: 19000          # 女性8項目/スタンダード
-  test_female_6: 15000          # 女性6項目/ベーシック
-  test_female_2: 9900           # 女性2項目/ライト
-  test_male_10: 28000           # 男性10項目/フルセット
-  test_male_7: 19000            # 男性7項目/スタンダード
-  test_male_5: 15000            # 男性5項目/ベーシック
-  test_male_2: 9900             # 男性2項目/ライト
+  test_full: 28000              # 女性10項目 / 男性10項目
+  test_standard: 19000          # 女性8項目 / 男性7項目
+  test_basic: 15000             # 女性6項目 / 男性5項目
+  test_light: 9900              # 女性2項目 / 男性2項目
 cost:                           # 原価(税込)・粗利計算用（将来）
   treat_drug: 1034
   test_female_10: 8309
