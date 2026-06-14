@@ -41,21 +41,30 @@ tags:
   faq2: "診察誘導_FAQ2"
   shina_read: "シナ読了_対象"    # STEP6到達・未決済（再アプローチ）
 
-# --- ステータス計測（2026-06-11 Lステップ設定調査反映）------
+# --- ステータス計測（2026-06-14 新タグ運用反映）-------------
+status_tags:
+  paid: "STD_決済済み"
+  monshin_submitted: "STD_問診票提出済み"
+  shipped: "STD_発送済み"
 status_availability:
   paid: derived
-  monshin_submitted: unavailable
+  monshin_submitted: derived
   shinsatsu_done: unavailable
-  shipped: unavailable
-  needs_follow: unavailable
+  shipped: derived
+  needs_follow: derived
+status_available_from:
+  monshin_submitted: "2026-06-14"
+  shipped: "2026-06-14"
+  needs_follow: "2026-06-14"
 status_notes:
-  paid: "購入後に付与される商品タグから導出"
-  monshin_submitted: "回答フォームにタグ追加がないため未計測"
+  paid: "STD_決済済みタグ・購入後の商品タグから導出"
+  monshin_submitted: "STD_問診票提出済みタグから導出（2026-06-14運用開始）"
   shinsatsu_done: "診察完了シナリオにアクション設定がないため未計測"
-  shipped: "発送テンプレートにタグ追加がないため未計測"
-  needs_follow: "問診票提出が未計測のため算出不可"
+  shipped: "STD_発送済みタグから導出（2026-06-14運用開始）"
+  needs_follow: "決済済みかつ問診票未提出として導出（2026-06-14運用開始）"
 status_rules:
   shipped_marks: []
+  needs_follow_mode: paid_without_monshin
 
 # --- 購入タグ（2026-06-13 Lステップ発火履歴で確認）----------
 purchase_tags:

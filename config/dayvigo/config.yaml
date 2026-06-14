@@ -70,19 +70,27 @@ pricing:
   tanpin_3m: 22396     # 一括計上（薬代6732×3 + 1650 + 550）
   tanpin_6m: 40348     # 一括計上（薬代6358×6 + 1650 + 550）
 
-# --- ステータス導出（2026-06-11 Lステップ設定調査反映）------
+# --- ステータス導出（2026-06-14 新タグ運用反映）-------------
+status_tags:
+  paid:
+    - "決済完了"                  # 既存タグ
+    - "睡眠_決済済み"            # 2026-06-14追加
+  monshin_submitted: "睡眠_問診票提出済み"
+  shipped: "睡眠_発送済み"
 status_availability:
-  paid: derived                 # 専用タグなし。購入タグ/対応マークから導出
-  monshin_submitted: unavailable # ビデオ移行後の回答フォームにタグ追加なし
-  shinsatsu_done: derived       # 診察完了シナリオのアクション値から導出
-  shipped: derived              # 専用タグなし。対応マークから導出
-  needs_follow: derived         # 問診未提出を示す対応マークから導出
+  paid: derived
+  monshin_submitted: derived
+  shinsatsu_done: unavailable
+  shipped: derived
+  needs_follow: derived
+status_available_from:
+  monshin_submitted: "2026-06-14"
 status_notes:
-  paid: "専用の決済完了タグなし。購入タグ・対応マークから導出"
-  monshin_submitted: "回答フォームにタグ追加がないため未計測"
-  shinsatsu_done: "診察完了シナリオのアクション「問)提出当日17時」から導出"
-  shipped: "専用の発送済みタグなし。対応マークから導出"
-  needs_follow: "問診未提出を示す対応マークから導出"
+  paid: "決済完了・睡眠_決済済み・購入タグ・対応マークから導出"
+  monshin_submitted: "睡眠_問診票提出済みタグから導出（2026-06-14運用開始）"
+  shinsatsu_done: "専用タグをCSVへ出力できないため未計測"
+  shipped: "睡眠_発送済みタグ・対応マークから導出"
+  needs_follow: "決済済みかつ問診票未提出、または既存の未提出マークから導出"
 status_rules:
   paid_marks:                    # 決済完了とみなすマーク
     - "発送済"
@@ -106,8 +114,7 @@ status_rules:
     - "1ヵ月　昨日決済(新問診票未提出)"
     - "3ヵ月　昨日決済(新問診票未提出)"
     - "6ヵ月　昨日決済(新問診票未提出)"
-  shinsatsu_done:
-    - "問)提出当日17時"
+  needs_follow_mode: paid_without_monshin_or_marks
 
 # --- 評価対象シナリオ（変種識別列が無ければSTEP貢献にフォールバック）
 scenarios:
