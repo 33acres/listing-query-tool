@@ -50,7 +50,10 @@ export function normalizeFriends(
     );
     const mark = readStandard(filtered, columns, "mark");
     const rawUserId = readStandard(filtered, columns, "user_id");
-    const status = deriveStatus({ mark, purchases, raw: filtered }, config);
+    const status = deriveStatus(
+      { mark, purchases, raw: filtered, addedAt },
+      config,
+    );
     const step0Branch =
       Object.entries(columns.branchTags).find(([, column]) =>
         isTruthyCell(filtered[column]),

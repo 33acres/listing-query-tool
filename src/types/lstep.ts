@@ -2,11 +2,22 @@ export type ProjectName = "dayvigo" | "std";
 
 export type PurchaseKey = string;
 
+export type StatusKey =
+  | "paid"
+  | "monshin_submitted"
+  | "shinsatsu_done"
+  | "shipped"
+  | "needs_follow";
+
 export interface StatusRules {
   paid_marks?: string[];
   shipped_marks?: string[];
   monshin_submitted_marks?: string[];
   needs_follow_marks?: string[];
+  needs_follow_mode?:
+    | "marks"
+    | "paid_without_monshin"
+    | "paid_without_monshin_or_marks";
   shinsatsu_done?: string | string[];
 }
 
@@ -33,22 +44,15 @@ export interface AnalyzerConfig {
   column_mapping: Record<string, string>;
   tags: Record<string, string>;
   branch_tags?: Record<string, string>;
-  status_tags?: Record<string, string>;
+  status_tags?: Partial<Record<StatusKey, string | string[]>>;
   purchase_tags: Record<PurchaseKey, string> | "TBD";
   pricing: Record<PurchaseKey, number>;
   status_rules: StatusRules;
   status_availability?: Partial<
-    Record<
-      "paid" | "monshin_submitted" | "shinsatsu_done" | "shipped" | "needs_follow",
-      MeasurementAvailability
-    >
+    Record<StatusKey, MeasurementAvailability>
   >;
-  status_notes?: Partial<
-    Record<
-      "paid" | "monshin_submitted" | "shinsatsu_done" | "shipped" | "needs_follow",
-      string
-    >
-  >;
+  status_available_from?: Partial<Record<StatusKey, string>>;
+  status_notes?: Partial<Record<StatusKey, string>>;
   scenarios: string[];
   ads: {
     source: string;

@@ -343,7 +343,8 @@ export function AnalyzerClient({ config }: Props) {
                       <h2 className="font-bold text-amber-950">計測状況</h2>
                       <p className="mt-2 text-sm leading-6 text-amber-900">
                         取得できない指標は0件ではなく「未計測」と表示します。判定方法は
-                        configのstatus_availability / status_rulesで切り替えられます。
+                        configのstatus_tags / status_available_from /
+                        status_rulesで切り替えられます。
                       </p>
                     </div>
                   </div>
