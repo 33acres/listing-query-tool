@@ -6,6 +6,15 @@
 project: std
 display_name: CUREA オンライン性病外来
 
+drive:
+  folder_id: "127os_AXL2Rp49yEUtRKRmyoqh7WfwN11"
+  folder_url: "https://drive.google.com/drive/folders/127os_AXL2Rp49yEUtRKRmyoqh7WfwN11"
+  weekly_subfolder: "weekly"
+  required_files:
+    ads: "ads.csv"
+    lstep: "lstep.csv"
+    management: ["management.csv", "management.xlsx"]
+
 flow:
   new_flow_start: "2026-04-29"
 

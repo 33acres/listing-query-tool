@@ -12,39 +12,47 @@
 このマニュアルでは、特に `ads.csv` と `lstep.csv` に何を出せばよいかを定義する。
 
 ## 置き場所
-ローカルPCではなく、Google Driveの指定ルートフォルダに置く。
+ローカルPCではなく、案件ごとのGoogle Drive指定フォルダに置く。
 
-案件ごと、分析実行日ごとにフォルダを分ける。
+案件フォルダは以下を使う。
+
+| 案件 | Google Driveフォルダ |
+| --- | --- |
+| dayvigo | https://drive.google.com/drive/folders/1lOKZSbIb13YJKXJ-PZbEAOxS-LeAkell |
+| STD | https://drive.google.com/drive/folders/127os_AXL2Rp49yEUtRKRmyoqh7WfwN11 |
+
+各案件フォルダの中で、分析実行日ごとにフォルダを分ける。
 
 例: 2026年6月23日（月）に、前週分を分析する場合。
 
 ```text
-Google Drive指定ルートフォルダ/
-  STD/
-    weekly/
-      2026-06-23/
-        ads.csv
-        lstep.csv
-        management.xlsx
+dayvigo Driveフォルダ/
+  weekly/
+    2026-06-23/
+      ads.csv
+      lstep.csv
+      management.xlsx
 
-  dayvigo/
-    weekly/
-      2026-06-23/
-        ads.csv
-        lstep.csv
-        management.xlsx
+STD Driveフォルダ/
+  weekly/
+    2026-06-23/
+      ads.csv
+      lstep.csv
+      management.xlsx
 ```
 
 原則として、集計対象期間は「前週月曜から日曜」。
 月次累計も見るため、可能であれば月初から前日までのデータも同じ形式で出せる状態にしておく。
 
 ## Google Driveフォルダ運用
-ツールは、ユーザーが指定したGoogle Driveルートフォルダを入力元として読む。
+ツールは、configに設定された案件別Google Driveフォルダを入力元として読む。
 
-MVPでは以下のどちらかを採用する。
+フォルダIDは `config/<project>/config.yaml` の `drive.folder_id` に設定する。
 
-- ルートフォルダURLまたはフォルダIDを画面に入力する
-- configにルートフォルダIDを設定する
+| 案件 | folder_id |
+| --- | --- |
+| dayvigo | `1lOKZSbIb13YJKXJ-PZbEAOxS-LeAkell` |
+| STD | `127os_AXL2Rp49yEUtRKRmyoqh7WfwN11` |
 
 Drive上のファイルはツール側サーバ/DBへ保存しない。
 Driveから取得したファイルBlobをブラウザ内で解析し、集計値だけを画面に表示する。
@@ -54,15 +62,13 @@ Driveから取得したファイルBlobをブラウザ内で解析し、集計�
 
 | 階層 | 名前 |
 | --- | --- |
-| 案件 | `STD` / `dayvigo` |
 | 種別 | `weekly` |
 | 分析実行日 | `YYYY-MM-DD` |
 
 例: 2026年6月23日（月）実行分。
 
 ```text
-STD/weekly/2026-06-23/
-dayvigo/weekly/2026-06-23/
+weekly/2026-06-23/
 ```
 
 ### ファイル名ルール
@@ -269,15 +275,15 @@ Lステップから出力された形式をそのまま使う。
 - `ID` は集計キーとして使うが、出力画面には表示しない。
 
 ## 月曜の作業チェックリスト
-1. Google Drive指定ルートフォルダ内に、STD用の週次フォルダを作る。
-2. Google Drive指定ルートフォルダ内に、dayvigo用の週次フォルダを作る。
+1. STDのGoogle Driveフォルダ内に、週次フォルダを作る。
+2. dayvigoのGoogle Driveフォルダ内に、週次フォルダを作る。
 3. Google広告から検索語句レポートを出し、`ads.csv` として該当フォルダへアップロードする。
 4. Lステップから友だち情報CSVを出し、`lstep.csv` として該当フォルダへアップロードする。
 5. 全体管理をCSVまたはxlsxで出し、`management.csv` または `management.xlsx` として該当フォルダへアップロードする。
 6. `ads.csv` に `日付/検索語句/表示回数/クリック数/費用/コンバージョン` があるか確認する。
 7. `lstep.csv` に案件ごとの必須タグ列があるか確認する。
 8. 氏名・電話・メール・住所・問診自由記述が入っていないか確認する。
-9. ツールでGoogle Driveルートフォルダを指定し、対象週を選んで分析する。
+9. ツールで対象案件と対象週を選んで分析する。
 
 ## よくあるNG
 - `ads.csv` がキャンペーン集計だけで、検索語句列が無い。
