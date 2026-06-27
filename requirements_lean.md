@@ -15,6 +15,7 @@ dayvigoは今回の要件から外す。以後、この要件書で対象とす�
 - 個人情報は保持・表示しない
 - 列名、タグ名、単価、判定条件、Google DriveフォルダIDは `config/<project>/config.yaml` から読む
 - 週次入力データの作成手順は `weekly_input_manual.md` に従う
+- 週次分析結果の確認手順は `std_weekly_analysis_guide.md` に従う
 
 ## 3. 今回のスコープ
 ### 必須
