@@ -14,6 +14,12 @@ drive:
     ads: "ads.csv"
     lstep: "lstep.csv"
     management: ["management.csv", "management.xlsx"]
+  output_subfolder: "output"
+  output_files:
+    report: "weekly_report.md"
+    kpi: "weekly_kpi.csv"
+    bottlenecks: "bottlenecks.csv"
+    audit: "analysis_meta.json"
 
 flow:
   new_flow_start: "2026-04-29"

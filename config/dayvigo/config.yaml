@@ -6,15 +6,6 @@
 project: dayvigo
 display_name: CUREA オンライン睡眠外来
 
-drive:
-  folder_id: "1lOKZSbIb13YJKXJ-PZbEAOxS-LeAkell"
-  folder_url: "https://drive.google.com/drive/folders/1lOKZSbIb13YJKXJ-PZbEAOxS-LeAkell"
-  weekly_subfolder: "weekly"
-  required_files:
-    ads: "ads.csv"
-    lstep: "lstep.csv"
-    management: ["management.csv", "management.xlsx"]
-
 flow:
   new_flow_start: "2026-04-29"   # 新フロー集計起点
 
