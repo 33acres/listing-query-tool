@@ -43,6 +43,7 @@ STD Driveフォルダ/
       lstep.csv
       management.xlsx
       output/
+        weekly_dashboard.xlsx
         weekly_report.md
         weekly_kpi.csv
         bottlenecks.csv
@@ -109,6 +110,7 @@ weekly/2026-06-23/
 
 ```text
 weekly/YYYY-MM-DD/output/
+  weekly_dashboard.xlsx
   weekly_report.md
   weekly_kpi.csv
   bottlenecks.csv
@@ -117,12 +119,32 @@ weekly/YYYY-MM-DD/output/
 
 | ファイル | 内容 |
 | --- | --- |
+| `weekly_dashboard.xlsx` | 週次定例で画面共有するExcelダッシュボード |
 | `weekly_report.md` | 定例で読める説明メモ。結論、ボトルネック、次アクション |
 | `weekly_kpi.csv` | 広告、Lステップ、全体管理の主要KPI集計 |
 | `bottlenecks.csv` | ボトルネック種別、判定理由、根拠指標 |
 | `analysis_meta.json` | 入力ファイル名、生成日時、警告、集計対象期間 |
 
 出力ファイルには、氏名・電話・メール・住所・問診自由記述などの個人情報を含めない。
+
+### `weekly_dashboard.xlsx` の見た目
+Excelダッシュボードは、画面共有しやすい1枚目の `Dashboard` シートを中心にする。
+
+- 上部: タイトル、対象期間、最終更新日時
+- KPIカード: 売上、粗利、粗利率、CV数、広告費、CPA、ROAS
+- コメント枠: 今週の結論と最大ボトルネック
+- 表: 商品別の売上、CV、構成比、粗利
+- グラフ: 週次または日次の売上・粗利推移
+- グラフ: 商品構成比
+- 補足: 警告、未計測、データ不一致
+
+対象はSTDのみなので、商品カテゴリは以下を基本にする。
+
+- 性感染症治療薬
+- フルセット
+- スタンダードセット
+- ベーシックセット
+- ライトセット
 
 ## `ads.csv`
 
@@ -296,7 +318,8 @@ Lステップから出力された形式をそのまま使う。
 7. 氏名・電話・メール・住所・問診自由記述が入っていないか確認する。
 8. ツールで対象週を選んで分析する。
 9. 画面の週次サマリーを確認する。
-10. Driveの `output/` に4つの出力ファイルができているか確認する。
+10. Driveの `output/` に5つの出力ファイルができているか確認する。
+11. `weekly_dashboard.xlsx` を開き、画面共有できる状態か確認する。
 
 ## よくあるNG
 - `ads.csv` がキャンペーン集計だけで、検索語句列が無い。

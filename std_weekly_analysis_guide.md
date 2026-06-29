@@ -55,6 +55,7 @@ weekly/YYYY-MM-DD/
 
 ```text
 weekly/YYYY-MM-DD/output/
+  weekly_dashboard.xlsx
   weekly_report.md
   weekly_kpi.csv
   bottlenecks.csv
@@ -160,10 +161,11 @@ Lステップから友だち情報CSVを出力し、`lstep.csv` として週次�
 分析実行後、画面表示とDrive出力を確認する。
 
 ### Step 6. `output/` を確認する
-以下の4ファイルが生成されているか確認する。
+以下の5ファイルが生成されているか確認する。
 
 ```text
 output/
+  weekly_dashboard.xlsx
   weekly_report.md
   weekly_kpi.csv
   bottlenecks.csv
@@ -173,7 +175,21 @@ output/
 ## 4. 分析結果で確認すること
 
 ### 最初に見るもの
-まず `weekly_report.md` を見る。
+まず `weekly_dashboard.xlsx` を見る。
+
+このファイルは、週次定例で画面共有するためのExcelダッシュボード。
+上部にKPIカード、中央に表とグラフ、右側または下部にコメントを配置する。
+
+Dashboardシートで確認する順番:
+
+1. 売上、粗利、粗利率、CV数
+2. 広告費、CPA、ROAS
+3. LINE登録数、問診票提出率、発送済み数
+4. 商品別の売上・粗利・構成比
+5. 週次コメントと最大ボトルネック
+6. 警告、未計測、データ不一致
+
+次に `weekly_report.md` を見る。
 
 確認する順番:
 
@@ -286,6 +302,7 @@ CVR、LINECVR、問診票提出率を順に見る。
 - `ads.csv`、`lstep.csv`、`management.csv` または `management.xlsx` がDriveにある
 - 分析が正常に完了している
 - 画面に週次サマリーが表示されている
+- `output/weekly_dashboard.xlsx` が生成されている
 - `output/weekly_report.md` が生成されている
 - `output/weekly_kpi.csv` が生成されている
 - `output/bottlenecks.csv` が生成されている

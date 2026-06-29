@@ -16,6 +16,7 @@ drive:
     management: ["management.csv", "management.xlsx"]
   output_subfolder: "output"
   output_files:
+    dashboard: "weekly_dashboard.xlsx"
     report: "weekly_report.md"
     kpi: "weekly_kpi.csv"
     bottlenecks: "bottlenecks.csv"

@@ -121,6 +121,7 @@ dayvigoは今回の要件から外す。以後、この要件書で対象とす�
 
 ```text
 weekly/YYYY-MM-DD/output/
+  weekly_dashboard.xlsx
   weekly_report.md
   weekly_kpi.csv
   bottlenecks.csv
@@ -129,10 +130,35 @@ weekly/YYYY-MM-DD/output/
 
 | ファイル | 内容 | PII |
 | --- | --- | --- |
+| `weekly_dashboard.xlsx` | 画面共有用のExcelダッシュボード。KPIカード、商品別表、推移グラフ、構成比、コメントを含む | 含めない |
 | `weekly_report.md` | 定例で読める説明メモ。結論、ボトルネック、次アクションを含む | 含めない |
 | `weekly_kpi.csv` | 広告、Lステップ、全体管理の主要KPI集計 | 含めない |
 | `bottlenecks.csv` | ボトルネック種別、判定理由、根拠指標 | 含めない |
 | `analysis_meta.json` | 入力ファイル名、生成日時、警告、集計対象期間 | 含めない |
+
+`weekly_dashboard.xlsx` は、週次定例で画面共有しやすい見た目を優先する。標準シート構成は以下。
+
+| シート | 内容 |
+| --- | --- |
+| `Dashboard` | KPIカード、今週のコメント、商品別売上・粗利、推移グラフ、商品構成比、ボトルネック要約 |
+| `KPI` | 集計値の根拠データ。広告、Lステップ、全体管理の主要KPI |
+| `Bottlenecks` | ボトルネック判定の根拠 |
+| `Meta` | 入力ファイル名、生成日時、対象期間、警告 |
+
+Dashboardの主な表示項目:
+
+- 売上
+- 粗利
+- 粗利率
+- CV数
+- 広告費
+- CPA / ROAS
+- LINE登録数
+- 問診票提出率
+- 発送済み数
+- 商品別売上・粗利
+- 商品構成比
+- 週次コメント
 
 ## 8. 実装方針
 - 既存の `listing-query-tool` の広告分析ロジックは流用する
@@ -149,6 +175,7 @@ weekly/YYYY-MM-DD/output/
 - 月曜日に先週分の数字を1画面で見られる
 - 週次説明の骨子をそのまま出せる
 - STD週次フォルダの `output/` 配下に集計結果が出る
+- `weekly_dashboard.xlsx` を開くと、STDの週次状況を1画面で説明できる
 - PIIが出ない
 - configを変えるだけで列名や単価が変わる
 
