@@ -1,0 +1,1 @@
+"""Canonical weekly dashboard pipeline."""

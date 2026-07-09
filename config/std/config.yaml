@@ -17,10 +17,45 @@ drive:
   output_subfolder: "output"
   output_files:
     dashboard: "weekly_dashboard.xlsx"
-    report: "weekly_report.md"
     kpi: "weekly_kpi.csv"
     bottlenecks: "bottlenecks.csv"
     audit: "analysis_meta.json"
+    history: "funnel_history.csv"
+
+weekly_dashboard:
+  timezone: "Asia/Tokyo"
+  run_weekday: "Tuesday"
+  input_root: "output/{project}/{run_date}/raw"
+  output_root: "output/{project}/{run_date}"
+  history_root: "output/{project}/funnel_history.csv"
+  lstep:
+    header_row: 2
+    encodings: ["cp932", "utf-8-sig", "utf-8"]
+  ads:
+    encodings: ["utf-16", "utf-16le", "utf-8-sig", "cp932", "utf-8"]
+    separators: ["\t", ","]
+    header_search_rows: 5
+    column_aliases:
+      date: ["日", "日付", "年月日", "Date", "Day"]
+      clicks: ["クリック数", "クリック", "Clicks"]
+      search_term: ["検索語句", "検索キーワード", "Search term"]
+    account_total_labels: ["合計: アカウント"]
+  management:
+    file_patterns:
+      - "management*.csv"
+      - "management*.xlsx"
+      - "management*.pdf"
+    column_aliases:
+      date: ["日付", "date", "Date"]
+      cv_f: ["CV(F)", "CV（F）", "cv_f"]
+      monshin_answers: ["問診回答", "問診回答数", "monshin_answers"]
+      purchase_cv: ["購入CV", "商品CV合計", "purchase_cv"]
+  funnel_stages:
+    - "ad_clicks"
+    - "line_registrations"
+    - "cv_f"
+    - "monshin_answers"
+    - "purchase_cv"
 
 flow:
   new_flow_start: "2026-04-29"
