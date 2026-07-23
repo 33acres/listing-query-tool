@@ -187,7 +187,19 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(1, len(second))
             self.assertFalse((outputs / "weekly_report.md").exists())
             self.assertEqual(
-                ["Weekly"],
+                [
+                    "Dashboard",
+                    "KPI",
+                    "Weekly",
+                    "Bottlenecks",
+                    "Product",
+                    "Coupon",
+                    "Ad_Funnel",
+                    "LSTEP_Summary",
+                    "LSTEP_Scenario",
+                    "Ads_TopCost",
+                    "Meta",
+                ],
                 load_workbook(outputs / "weekly_dashboard.xlsx", read_only=True).sheetnames,
             )
             self.assertEqual(

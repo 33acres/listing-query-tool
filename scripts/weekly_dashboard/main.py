@@ -13,8 +13,10 @@ from scripts.weekly_dashboard.core import (  # noqa: E402
     build_history_row,
     load_config,
     read_ads,
+    read_ads_detail,
     read_lstep,
     read_management,
+    read_management_detail,
     resolve_paths,
     target_week,
     update_history,
@@ -44,12 +46,14 @@ def main() -> int:
     if not lstep_path.is_file():
         raise FileNotFoundError(f"lstep.csvが見つかりません: {lstep_path}")
 
-    line_registrations, _snapshot_totals = read_lstep(lstep_path, config, week)
+    line_registrations, snapshot_totals = read_lstep(lstep_path, config, week)
     ads_path = input_dir / config["drive"]["required_files"]["ads"]
     if not ads_path.is_file():
         raise FileNotFoundError(f"ads.csvが見つかりません: {ads_path}")
     ad_clicks = read_ads(ads_path, config, week)
+    ads_detail = read_ads_detail(ads_path, config)
     management = read_management(input_dir, config, week)
+    management_detail = read_management_detail(input_dir, config)
     management["clicks"] = ad_clicks
     row = build_history_row(args.project, week, management, line_registrations)
 
@@ -63,7 +67,16 @@ def main() -> int:
         {path for pattern in management_patterns for path in input_dir.glob(pattern)}
     )
     source_files = [ads_path, lstep_path, *management_files]
-    write_outputs(output_dir, config, row, history, source_files)
+    write_outputs(
+        output_dir,
+        config,
+        row,
+        history,
+        source_files,
+        lstep_totals=snapshot_totals,
+        management_detail=management_detail,
+        ads_detail=ads_detail,
+    )
     print(json.dumps(row, ensure_ascii=False, sort_keys=True))
     return 0
 

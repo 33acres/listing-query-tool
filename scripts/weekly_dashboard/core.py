@@ -12,6 +12,9 @@ from typing import Any, Iterable
 import pandas as pd
 import yaml
 from openpyxl import Workbook
+from openpyxl.chart import BarChart, LineChart, Reference
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from pypdf import PdfReader
 
 
@@ -28,6 +31,32 @@ HISTORY_COLUMNS = [
     "cv_f_rate",
     "monshin_answer_rate",
     "purchase_rate",
+]
+
+MANAGEMENT_COLUMNS = [
+    "date",
+    "gross_profit",
+    "sales",
+    "ad_cost",
+    "impressions",
+    "clicks",
+    "cv_f",
+    "monshin_answers",
+    "treat_drug_cv",
+    "test_light_cv",
+    "test_basic_cv",
+    "test_standard_cv",
+    "test_full_cv",
+    "purchase_cv",
+]
+
+AD_COLUMNS = [
+    "date",
+    "search_term",
+    "cost",
+    "clicks",
+    "impressions",
+    "conversions",
 ]
 
 PII_PATTERNS = (
@@ -103,6 +132,43 @@ def _read_csv_with_encodings(
     raise ValueError(f"CSVを読み込めません: {path} ({'; '.join(errors)})")
 
 
+def _read_table_with_header_search(
+    path: Path,
+    encodings: Iterable[str],
+    *,
+    separators: Iterable[str] = (",",),
+    header_search_rows: int = 1,
+    required_aliases: set[str],
+) -> pd.DataFrame:
+    errors: list[str] = []
+    for encoding in encodings:
+        for separator in separators:
+            for skiprows in range(header_search_rows):
+                try:
+                    candidate = pd.read_csv(
+                        path,
+                        encoding=encoding,
+                        sep=separator,
+                        skiprows=skiprows,
+                        low_memory=False,
+                    )
+                except (UnicodeDecodeError, pd.errors.ParserError) as error:
+                    errors.append(f"{encoding}/{separator!r}/{skiprows}: {error}")
+                    continue
+                if required_aliases.intersection(candidate.columns):
+                    return candidate
+    raise ValueError(f"CSVのヘッダーを検出できません: {path} ({'; '.join(errors[-3:])})")
+
+
+def _rename_by_aliases(frame: pd.DataFrame, aliases: dict[str, list[str]]) -> pd.DataFrame:
+    rename: dict[str, str] = {}
+    for canonical, candidates in aliases.items():
+        match = next((candidate for candidate in candidates if candidate in frame.columns), None)
+        if match:
+            rename[match] = canonical
+    return frame.rename(columns=rename)
+
+
 def read_lstep(
     path: Path, config: dict[str, Any], week: Week
 ) -> tuple[int, dict[str, int]]:
@@ -146,56 +212,40 @@ def read_lstep(
     return int(weekly[added_at].notna().sum()), totals
 
 
-def read_ads(path: Path, config: dict[str, Any], week: Week) -> int:
+def read_ads_detail(path: Path, config: dict[str, Any]) -> pd.DataFrame:
     settings = config["weekly_dashboard"]["ads"]
-    frame: pd.DataFrame | None = None
     aliases = settings["column_aliases"]
     required_aliases = {candidate for values in aliases.values() for candidate in values}
-    errors: list[str] = []
-    for encoding in settings["encodings"]:
-        for separator in settings["separators"]:
-            for skiprows in range(int(settings["header_search_rows"])):
-                try:
-                    candidate = pd.read_csv(
-                        path,
-                        encoding=encoding,
-                        sep=separator,
-                        skiprows=skiprows,
-                        low_memory=False,
-                    )
-                except (UnicodeDecodeError, pd.errors.ParserError) as error:
-                    errors.append(f"{encoding}/{separator!r}/{skiprows}: {error}")
-                    continue
-                if required_aliases.intersection(candidate.columns):
-                    frame = candidate
-                    break
-            if frame is not None:
-                break
-        if frame is not None:
-            break
-    if frame is None:
-        raise ValueError(f"広告CSVのヘッダーを検出できません: {path} ({'; '.join(errors[-3:])})")
-
-    rename: dict[str, str] = {}
-    for canonical, candidates in aliases.items():
-        match = next((candidate for candidate in candidates if candidate in frame.columns), None)
-        if match:
-            rename[match] = canonical
-    frame = frame.rename(columns=rename)
+    frame = _read_table_with_header_search(
+        path,
+        settings["encodings"],
+        separators=settings["separators"],
+        header_search_rows=int(settings["header_search_rows"]),
+        required_aliases=required_aliases,
+    )
+    frame = _rename_by_aliases(frame, aliases)
     missing = {"date", "clicks"} - set(frame.columns)
     if missing:
         raise ValueError(f"広告CSVに必須列がありません: {', '.join(sorted(missing))}")
+    for column in AD_COLUMNS:
+        if column not in frame.columns:
+            frame[column] = None
+    result = frame[AD_COLUMNS].copy()
+    result["date"] = pd.to_datetime(result["date"], errors="coerce")
+    for column in ("cost", "clicks", "impressions", "conversions"):
+        result[column] = result[column].map(lambda value: _parse_number(value) or 0)
+    return result.dropna(subset=["date"])
+
+
+def read_ads(path: Path, config: dict[str, Any], week: Week) -> int:
+    settings = config["weekly_dashboard"]["ads"]
+    frame = read_ads_detail(path, config)
     if "search_term" in frame.columns:
         account_totals = frame[
-            frame["search_term"].astype(str).isin(settings["account_total_labels"])
+            frame["search_term"].astype(str).isin(settings.get("account_total_labels", []))
         ]
         if not account_totals.empty:
             frame = account_totals.copy()
-    frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
-    frame["clicks"] = pd.to_numeric(
-        frame["clicks"].astype(str).str.replace(",", "", regex=False),
-        errors="coerce",
-    ).fillna(0)
     mask = (frame["date"].dt.date >= week.start) & (frame["date"].dt.date <= week.end)
     weekly = frame[mask]
     return int(round(float(weekly["clicks"].sum())))
@@ -245,7 +295,7 @@ def parse_management_pdf_text(text: str) -> pd.DataFrame:
                 "purchase_cv": sum(value or 0 for value in values[14:19]),
             }
         )
-    return pd.DataFrame(rows, columns=["date", "clicks", "cv_f", "monshin_answers", "purchase_cv"])
+    return pd.DataFrame(rows, columns=MANAGEMENT_COLUMNS)
 
 
 def _read_management_file(path: Path, config: dict[str, Any]) -> pd.DataFrame:
@@ -253,42 +303,32 @@ def _read_management_file(path: Path, config: dict[str, Any]) -> pd.DataFrame:
         reader = PdfReader(str(path))
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
         return parse_management_pdf_text(text)
-    settings = config["weekly_dashboard"]["management"]
     if path.suffix.lower() == ".xlsx":
         frame = pd.read_excel(path)
     else:
-        frame = None
-        errors: list[str] = []
+        settings = config["weekly_dashboard"]["management"]
         aliases = settings["column_aliases"]
         required_aliases = {candidate for values in aliases.values() for candidate in values}
-        for skiprows in range(int(settings.get("header_search_rows", 1))):
-            try:
-                candidate = _read_csv_with_encodings(
-                    path, ("utf-8-sig", "cp932", "utf-8"), skiprows=skiprows
-                )
-            except ValueError as error:
-                errors.append(f"{skiprows}: {error}")
-                continue
-            if required_aliases.intersection(candidate.columns):
-                frame = candidate
-                break
-        if frame is None:
-            raise ValueError(
-                f"管理表のヘッダーを検出できません: {path} ({'; '.join(errors[-3:])})"
-            )
+        frame = _read_table_with_header_search(
+            path,
+            ("utf-8-sig", "cp932", "utf-8"),
+            header_search_rows=int(settings.get("header_search_rows", 1)),
+            required_aliases=required_aliases,
+        )
 
+    settings = config["weekly_dashboard"]["management"]
     aliases = settings["column_aliases"]
-    rename: dict[str, str] = {}
-    for canonical, candidates in aliases.items():
-        match = next((candidate for candidate in candidates if candidate in frame.columns), None)
-        if match:
-            rename[match] = canonical
-    frame = frame.rename(columns=rename)
+    frame = _rename_by_aliases(frame, aliases)
     if "purchase_cv" not in frame.columns:
         component_columns = [
             column
-            for column in config["weekly_dashboard"]["management"].get(
-                "purchase_cv_component_aliases", []
+            for column in (
+                "treat_drug_cv",
+                "test_light_cv",
+                "test_basic_cv",
+                "test_standard_cv",
+                "test_full_cv",
+                *settings.get("purchase_cv_component_aliases", []),
             )
             if column in frame.columns
         ]
@@ -304,23 +344,30 @@ def _read_management_file(path: Path, config: dict[str, Any]) -> pd.DataFrame:
     missing = required - set(frame.columns)
     if missing:
         raise ValueError(f"管理表に必須列がありません: {', '.join(sorted(missing))}")
-    result = frame[["date", "cv_f", "monshin_answers", "purchase_cv"]].copy()
+    for column in MANAGEMENT_COLUMNS:
+        if column not in frame.columns:
+            frame[column] = 0
+    result = frame[MANAGEMENT_COLUMNS].copy()
     result["date"] = pd.to_datetime(result["date"], errors="coerce")
-    for column in required - {"date"}:
+    for column in set(MANAGEMENT_COLUMNS) - {"date"}:
         result[column] = result[column].map(lambda value: _parse_number(value) or 0)
     return result
 
 
-def read_management(
-    input_dir: Path, config: dict[str, Any], week: Week
-) -> dict[str, int]:
+def read_management_detail(input_dir: Path, config: dict[str, Any]) -> pd.DataFrame:
     patterns = config["weekly_dashboard"]["management"]["file_patterns"]
     files = sorted({path for pattern in patterns for path in input_dir.glob(pattern)})
     if not files:
         raise FileNotFoundError("management.* が見つかりません")
     frames = [_read_management_file(path, config) for path in files]
     combined = pd.concat(frames, ignore_index=True)
-    combined = combined.dropna(subset=["date"]).drop_duplicates(subset=["date"], keep="last")
+    return combined.dropna(subset=["date"]).drop_duplicates(subset=["date"], keep="last")
+
+
+def read_management(
+    input_dir: Path, config: dict[str, Any], week: Week
+) -> dict[str, int]:
+    combined = read_management_detail(input_dir, config)
     mask = (combined["date"].dt.date >= week.start) & (combined["date"].dt.date <= week.end)
     weekly = combined[mask]
     return {
@@ -374,12 +421,392 @@ def update_history(path: Path, row: dict[str, Any]) -> pd.DataFrame:
     return history
 
 
+def _style_sheet(sheet: Any) -> None:
+    header_fill = PatternFill("solid", fgColor="1F4E78")
+    header_font = Font(color="FFFFFF", bold=True)
+    thin = Side(style="thin", color="D9E2F3")
+    for row in sheet.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+            cell.border = Border(bottom=thin)
+            if cell.row == 1:
+                cell.fill = header_fill
+                cell.font = header_font
+    for column_cells in sheet.columns:
+        width = max(len(str(cell.value or "")) for cell in column_cells[:50])
+        sheet.column_dimensions[get_column_letter(column_cells[0].column)].width = min(
+            max(width + 2, 10), 28
+        )
+    sheet.freeze_panes = "A2"
+
+
+def _append_table(sheet: Any, rows: list[list[Any]], *, start_row: int = 1, start_col: int = 1) -> None:
+    for row_index, row_values in enumerate(rows, start_row):
+        for col_index, value in enumerate(row_values, start_col):
+            sheet.cell(row=row_index, column=col_index, value=value)
+
+
+def _week_label(value: Any) -> str:
+    return pd.Timestamp(value).date().isoformat()
+
+
+def _monthly_management(management_detail: pd.DataFrame) -> pd.DataFrame:
+    frame = management_detail.copy()
+    if frame.empty:
+        return pd.DataFrame()
+    frame["month"] = frame["date"].dt.strftime("%Y-%m")
+    grouped = frame.groupby("month", as_index=False)[
+        [
+            "gross_profit",
+            "sales",
+            "ad_cost",
+            "impressions",
+            "clicks",
+            "cv_f",
+            "monshin_answers",
+            "treat_drug_cv",
+            "test_light_cv",
+            "test_basic_cv",
+            "test_standard_cv",
+            "test_full_cv",
+            "purchase_cv",
+        ]
+    ].sum()
+    grouped["days"] = frame.groupby("month")["date"].nunique().values
+    grouped["vertical_roas"] = grouped.apply(lambda r: _safe_div(r["sales"], r["ad_cost"]), axis=1)
+    grouped["gross_margin"] = grouped.apply(lambda r: _safe_div(r["gross_profit"], r["sales"]), axis=1)
+    grouped["ctr"] = grouped.apply(lambda r: _safe_div(r["clicks"], r["impressions"]), axis=1)
+    grouped["cvr"] = grouped.apply(lambda r: _safe_div(r["cv_f"], r["clicks"]), axis=1)
+    grouped["cpa"] = grouped.apply(lambda r: _safe_div(r["ad_cost"], r["cv_f"]), axis=1)
+    grouped["click_to_purchase"] = grouped.apply(
+        lambda r: _safe_div(r["purchase_cv"], r["clicks"]), axis=1
+    )
+    return grouped
+
+
+def _weekly_management(management_detail: pd.DataFrame) -> pd.DataFrame:
+    frame = management_detail.copy()
+    if frame.empty:
+        return pd.DataFrame()
+    frame["week"] = frame["date"].dt.to_period("W-SUN").apply(lambda p: p.start_time.date())
+    grouped = frame.groupby("week", as_index=False)[
+        [
+            "gross_profit",
+            "sales",
+            "ad_cost",
+            "impressions",
+            "clicks",
+            "cv_f",
+            "monshin_answers",
+            "treat_drug_cv",
+            "test_light_cv",
+            "test_basic_cv",
+            "test_standard_cv",
+            "test_full_cv",
+            "purchase_cv",
+        ]
+    ].sum()
+    grouped["vertical_roas"] = grouped.apply(lambda r: _safe_div(r["sales"], r["ad_cost"]), axis=1)
+    grouped["gross_margin"] = grouped.apply(lambda r: _safe_div(r["gross_profit"], r["sales"]), axis=1)
+    grouped["ctr"] = grouped.apply(lambda r: _safe_div(r["clicks"], r["impressions"]), axis=1)
+    grouped["cvr"] = grouped.apply(lambda r: _safe_div(r["cv_f"], r["clicks"]), axis=1)
+    grouped["cpa"] = grouped.apply(lambda r: _safe_div(r["ad_cost"], r["cv_f"]), axis=1)
+    grouped["click_to_purchase"] = grouped.apply(
+        lambda r: _safe_div(r["purchase_cv"], r["clicks"]), axis=1
+    )
+    return grouped
+
+
+def _scenario_rows(config: dict[str, Any], lstep_totals: dict[str, int]) -> list[list[Any]]:
+    added_total = max(lstep_totals.values(), default=0)
+    sequence = [
+        ("分岐", config.get("branch_tags", {}).get("treat")),
+        ("分岐", config.get("branch_tags", {}).get("test")),
+        ("診察誘導", config.get("tags", {}).get("step0a")),
+        ("診察誘導", config.get("tags", {}).get("step1")),
+        ("診察誘導", config.get("tags", {}).get("step2")),
+        ("診察誘導", config.get("tags", {}).get("step3")),
+        ("診察誘導", config.get("tags", {}).get("step4")),
+        ("診察誘導", config.get("tags", {}).get("step5")),
+        ("診察誘導", config.get("tags", {}).get("step6")),
+        ("FAQ", config.get("tags", {}).get("faq1")),
+        ("FAQ", config.get("tags", {}).get("faq2")),
+    ]
+    rows: list[list[Any]] = []
+    previous_label = "友だち追加"
+    previous_count = added_total
+    for category, tag in sequence:
+        if not tag:
+            continue
+        count = int(lstep_totals.get(tag, 0))
+        retention = _safe_div(count, previous_count)
+        rows.append(
+            [
+                category,
+                tag,
+                count,
+                _safe_div(count, added_total),
+                previous_label,
+                previous_count,
+                retention,
+                max(previous_count - count, 0),
+                None if retention is None else max(1 - retention, 0),
+                "現在値タグから推定。厳密な発火日時別遷移ではない。",
+            ]
+        )
+        if category == "診察誘導":
+            previous_label = tag
+            previous_count = count
+    return rows
+
+
+def _ads_top_cost(ads_detail: pd.DataFrame, week: Week) -> pd.DataFrame:
+    if ads_detail.empty or "search_term" not in ads_detail.columns:
+        return pd.DataFrame()
+    mask = (ads_detail["date"].dt.date >= week.start) & (ads_detail["date"].dt.date <= week.end)
+    weekly = ads_detail[mask].copy()
+    weekly = weekly[weekly["search_term"].notna()]
+    weekly = weekly[~weekly["search_term"].astype(str).str.startswith("合計:")]
+    if weekly.empty:
+        return pd.DataFrame()
+    grouped = weekly.groupby("search_term", as_index=False)[
+        ["cost", "clicks", "impressions", "conversions"]
+    ].sum()
+    grouped = grouped.sort_values("cost", ascending=False).head(20).reset_index(drop=True)
+    grouped.insert(0, "費用順位", grouped.index + 1)
+    grouped.insert(2, "週", week.start.isoformat())
+    grouped["CTR"] = grouped.apply(lambda r: _safe_div(r["clicks"], r["impressions"]), axis=1)
+    grouped["CVR"] = grouped.apply(lambda r: _safe_div(r["conversions"], r["clicks"]), axis=1)
+    grouped["CPA"] = grouped.apply(lambda r: _safe_div(r["cost"], r["conversions"]), axis=1)
+    return grouped.rename(
+        columns={
+            "search_term": "検索クエリ",
+            "cost": "週次費用",
+            "clicks": "週次クリック",
+            "impressions": "週次表示回数",
+            "conversions": "週次CV",
+        }
+    )
+
+
+def _write_rich_dashboard(
+    path: Path,
+    config: dict[str, Any],
+    row: dict[str, Any],
+    history: pd.DataFrame,
+    lstep_totals: dict[str, int],
+    management_detail: pd.DataFrame,
+    ads_detail: pd.DataFrame,
+    source_files: list[Path],
+) -> None:
+    wb = Workbook()
+    wb.remove(wb.active)
+    dashboard = wb.create_sheet("Dashboard")
+    kpi = wb.create_sheet("KPI")
+    weekly_sheet = wb.create_sheet("Weekly")
+    bottlenecks = wb.create_sheet("Bottlenecks")
+    product = wb.create_sheet("Product")
+    coupon = wb.create_sheet("Coupon")
+    ad_funnel = wb.create_sheet("Ad_Funnel")
+    lstep_summary = wb.create_sheet("LSTEP_Summary")
+    lstep_scenario = wb.create_sheet("LSTEP_Scenario")
+    ads_top = wb.create_sheet("Ads_TopCost")
+    meta = wb.create_sheet("Meta")
+
+    monthly = _monthly_management(management_detail)
+    weekly_management = _weekly_management(management_detail)
+    current_month = monthly.iloc[-1].to_dict() if not monthly.empty else {}
+    scenario = _scenario_rows(config, lstep_totals)
+    ads_top_cost = _ads_top_cost(ads_detail, Week(date.fromisoformat(row["week_start"]), date.fromisoformat(row["week_end"])))
+
+    dashboard["B1"] = "STD 売上分析ダッシュボード"
+    dashboard["B1"].font = Font(size=18, bold=True, color="1F4E78")
+    dashboard.merge_cells("B1:L2")
+    dashboard["B4"] = f"対象期間: {row['week_start']} - {row['week_end']} / 最終更新: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    dashboard.merge_cells("B4:L4")
+    cards = [
+        ("売上金額", current_month.get("sales", 0), "円"),
+        ("垂直粗利", current_month.get("gross_profit", 0), "円"),
+        ("垂直ROAS", current_month.get("vertical_roas", 0), ""),
+        ("購入CV", row["purchase_cv"], ""),
+    ]
+    for index, (label, value, suffix) in enumerate(cards):
+        col = 2 + index * 3
+        cell = dashboard.cell(6, col, label)
+        val = dashboard.cell(7, col, value)
+        dashboard.merge_cells(start_row=6, start_column=col, end_row=6, end_column=col + 1)
+        dashboard.merge_cells(start_row=7, start_column=col, end_row=8, end_column=col + 1)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="5B9BD5")
+        val.font = Font(size=16, bold=True)
+        val.number_format = "0.0%" if label == "垂直ROAS" else '#,##0'
+        if suffix == "円":
+            val.number_format = '#,##0"円"'
+
+    dashboard["B10"] = "月次KPI"
+    kpi_rows = [
+        ["月", "売上", "垂直粗利", "粗利率", "広告費", "垂直ROAS", "クリック", "CV(F)", "問診回答", "購入CV", "実CPA"],
+    ]
+    for record in monthly.to_dict("records"):
+        kpi_rows.append(
+            [
+                record["month"],
+                record["sales"],
+                record["gross_profit"],
+                record["gross_margin"],
+                record["ad_cost"],
+                record["vertical_roas"],
+                record["clicks"],
+                record["cv_f"],
+                record["monshin_answers"],
+                record["purchase_cv"],
+                record["cpa"],
+            ]
+        )
+    _append_table(dashboard, kpi_rows, start_row=11, start_col=2)
+
+    dashboard["B17"] = "最新週ファネル"
+    funnel_rows = [
+        ["段階", "件数", "前段階比"],
+        ["広告クリック", row["ad_clicks"], 1],
+        ["LINE登録", row["line_registrations"], row["line_registration_rate"]],
+        ["CV(F)", row["cv_f"], row["cv_f_rate"]],
+        ["問診回答", row["monshin_answers"], row["monshin_answer_rate"]],
+        ["購入CV", row["purchase_cv"], row["purchase_rate"]],
+    ]
+    _append_table(dashboard, funnel_rows, start_row=18, start_col=2)
+
+    dashboard["G17"] = "確認事項"
+    note = (
+        "問診回答が0だが購入CVは発生。管理表上の問診計測定義またはタグ連携を確認。"
+        if row["monshin_answers"] == 0 and row["purchase_cv"] > 0
+        else "大きな計測欠損候補なし。"
+    )
+    dashboard["G18"] = note
+    dashboard.merge_cells("G18:L20")
+
+    dashboard["B25"] = "商品別CV"
+    product_rows = [
+        ["商品", "CV", "単価ベース売上"],
+        ["性感染症治療薬", current_month.get("treat_drug_cv", 0), current_month.get("treat_drug_cv", 0) * config["pricing"]["treat_drug"]],
+        ["ライトセット", current_month.get("test_light_cv", 0), current_month.get("test_light_cv", 0) * config["pricing"]["test_light"]],
+        ["ベーシックセット", current_month.get("test_basic_cv", 0), current_month.get("test_basic_cv", 0) * config["pricing"]["test_basic"]],
+        ["スタンダードセット", current_month.get("test_standard_cv", 0), current_month.get("test_standard_cv", 0) * config["pricing"]["test_standard"]],
+        ["フルセット", current_month.get("test_full_cv", 0), current_month.get("test_full_cv", 0) * config["pricing"]["test_full"]],
+    ]
+    _append_table(dashboard, product_rows, start_row=26, start_col=2)
+
+    dashboard["B34"] = "シナリオタグファネル（Lステップ現在値）"
+    _append_table(
+        dashboard,
+        [["区分", "タグ", "人数", "友だち比", "前段階", "前段階人数", "前段階比", "減少数", "減少率"]]
+        + [r[:9] for r in scenario],
+        start_row=35,
+        start_col=2,
+    )
+
+    dashboard["B50"] = "広告ファネル歩留り"
+    ad_rows = [
+        ["項目", "件数", "広告クリック比"],
+        ["広告クリック", row["ad_clicks"], 1],
+        ["LINE登録", row["line_registrations"], row["line_registration_rate"]],
+        ["CV(F)", row["cv_f"], row["cv_f_rate"]],
+        ["問診回答", row["monshin_answers"], row["monshin_answer_rate"]],
+        ["購入CV", row["purchase_cv"], row["purchase_rate"]],
+    ]
+    _append_table(dashboard, ad_rows, start_row=51, start_col=2)
+
+    for cell_range in ("B11:L13", "B18:D23", "B26:D31", "B35:J46", "B51:D56"):
+        for row_cells in dashboard[cell_range]:
+            for cell in row_cells:
+                if cell.row in (11, 18, 26, 35, 51):
+                    cell.fill = PatternFill("solid", fgColor="1F4E78")
+                    cell.font = Font(color="FFFFFF", bold=True)
+    dashboard.freeze_panes = "A12"
+    for col in range(1, 13):
+        dashboard.column_dimensions[get_column_letter(col)].width = 16
+
+    if len(kpi_rows) > 1:
+        chart = LineChart()
+        chart.title = "月次 売上/粗利"
+        chart.add_data(Reference(dashboard, min_col=3, max_col=4, min_row=11, max_row=10 + len(kpi_rows)), titles_from_data=True)
+        chart.set_categories(Reference(dashboard, min_col=2, min_row=12, max_row=10 + len(kpi_rows)))
+        chart.height = 6
+        chart.width = 12
+        dashboard.add_chart(chart, "G24")
+    chart2 = BarChart()
+    chart2.title = "最新週ファネル"
+    chart2.add_data(Reference(dashboard, min_col=3, min_row=18, max_row=23), titles_from_data=True)
+    chart2.set_categories(Reference(dashboard, min_col=2, min_row=19, max_row=23))
+    chart2.height = 6
+    chart2.width = 10
+    dashboard.add_chart(chart2, "G33")
+    chart3 = BarChart()
+    chart3.title = "商品別CV"
+    chart3.add_data(Reference(dashboard, min_col=3, min_row=26, max_row=31), titles_from_data=True)
+    chart3.set_categories(Reference(dashboard, min_col=2, min_row=27, max_row=31))
+    chart3.height = 6
+    chart3.width = 10
+    dashboard.add_chart(chart3, "G47")
+
+    kpi_data = monthly.to_dict("records")
+    _append_table(kpi, [list(monthly.columns)] + [[record.get(c) for c in monthly.columns] for record in kpi_data])
+    _append_table(weekly_sheet, [list(weekly_management.columns)] + [[record.get(c) for c in weekly_management.columns] for record in weekly_management.to_dict("records")])
+    _append_table(
+        bottlenecks,
+        [["week_start", "bottleneck", "rate", "definition", "note"],
+         [row["week_start"], "CV(F)→問診回答", row["monshin_answer_rate"] or 0, "問診回答 / CV(F)", note]],
+    )
+    _append_table(product, product_rows)
+    _append_table(coupon, [["配信日", "配信数", "開封数", "開封率", "検査キット購入クリック", "治療薬購入クリック", "合計クリック", "クリック率(対開封)"], ["未取得", None, None, None, None, None, None, None]])
+    _append_table(ad_funnel, ad_rows)
+    lstep_columns = ["friends", *list(config.get("status_tags", {}).values()), *list(config.get("purchase_tags", {}).values()), *list(config.get("branch_tags", {}).values()), *list(config.get("tags", {}).values())]
+    _append_table(lstep_summary, [lstep_columns, [row["line_registrations"], *[lstep_totals.get(c, 0) for c in lstep_columns[1:]]]])
+    _append_table(lstep_scenario, [["category", "tag", "count", "share_of_friends", "previous_stage", "previous_count", "retention_from_previous", "drop_from_previous", "drop_rate_from_previous", "note"], *scenario])
+    if not ads_top_cost.empty:
+        _append_table(ads_top, [list(ads_top_cost.columns)] + [[record.get(c) for c in ads_top_cost.columns] for record in ads_top_cost.to_dict("records")])
+    else:
+        _append_table(ads_top, [["費用順位", "検索クエリ", "週", "週次費用", "週次クリック", "週次表示回数", "CTR", "週次CV", "CVR", "CPA"]])
+    source_names = {
+        "ads": "ads.csv",
+        "lstep": "lstep.csv",
+        "management": [p.name for p in source_files if p.name not in {"ads.csv", "lstep.csv"}],
+    }
+    _append_table(
+        meta,
+        [
+            ["key", "value"],
+            ["project", config["project"]],
+            ["period_start", row["week_start"]],
+            ["period_end", row["week_end"]],
+            ["generated_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+            ["sources", json.dumps(source_names, ensure_ascii=False)],
+            ["privacy", "No per-person rows are exported. LSTEP display names are ignored."],
+            ["notes", "Phase A canonical pipeline with dashboard-format workbook."],
+        ],
+    )
+
+    for sheet in wb.worksheets:
+        if sheet.title != "Dashboard":
+            _style_sheet(sheet)
+        for row_cells in sheet.iter_rows():
+            for cell in row_cells:
+                if isinstance(cell.value, float) and 0 <= cell.value <= 1:
+                    cell.number_format = "0.0%"
+                elif isinstance(cell.value, (int, float)):
+                    cell.number_format = "#,##0"
+    wb.save(path)
+
+
 def write_outputs(
     output_dir: Path,
     config: dict[str, Any],
     row: dict[str, Any],
     history: pd.DataFrame,
     source_files: list[Path],
+    lstep_totals: dict[str, int] | None = None,
+    management_detail: pd.DataFrame | None = None,
+    ads_detail: pd.DataFrame | None = None,
 ) -> None:
     names = config["drive"]["output_files"]
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -397,13 +824,16 @@ def write_outputs(
         float_format="%.10g",
     )
 
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "Weekly"
-    sheet.append(HISTORY_COLUMNS)
-    for record in history[HISTORY_COLUMNS].itertuples(index=False, name=None):
-        sheet.append(list(record))
-    workbook.save(output_dir / names["dashboard"])
+    _write_rich_dashboard(
+        output_dir / names["dashboard"],
+        config,
+        row,
+        history,
+        lstep_totals or {},
+        management_detail if management_detail is not None else pd.DataFrame(columns=MANAGEMENT_COLUMNS),
+        ads_detail if ads_detail is not None else pd.DataFrame(columns=AD_COLUMNS),
+        source_files,
+    )
 
     source_hashes = {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(source_files)
