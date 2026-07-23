@@ -37,19 +37,29 @@ weekly_dashboard:
     header_search_rows: 5
     column_aliases:
       date: ["日", "日付", "年月日", "Date", "Day"]
-      clicks: ["クリック数", "クリック", "Clicks"]
+      clicks: ["クリック数", "クリック", "Clicks", "検索_クリック数"]
       search_term: ["検索語句", "検索キーワード", "Search term"]
     account_total_labels: ["合計: アカウント"]
   management:
+    header_search_rows: 5
     file_patterns:
       - "management*.csv"
       - "management*.xlsx"
       - "management*.pdf"
+      - "性感染症全体管理*.csv"
+      - "性感染症全体管理*.xlsx"
+      - "性感染症全体管理*.pdf"
     column_aliases:
       date: ["日付", "date", "Date"]
       cv_f: ["CV(F)", "CV（F）", "cv_f"]
       monshin_answers: ["問診回答", "問診回答数", "monshin_answers"]
       purchase_cv: ["購入CV", "商品CV合計", "purchase_cv"]
+    purchase_cv_component_aliases:
+      - "治療薬CV"
+      - "ライトCV"
+      - "ベーシックCV"
+      - "スタンダードCV"
+      - "フルセットCV"
   funnel_stages:
     - "ad_clicks"
     - "line_registrations"

@@ -253,18 +253,53 @@ def _read_management_file(path: Path, config: dict[str, Any]) -> pd.DataFrame:
         reader = PdfReader(str(path))
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
         return parse_management_pdf_text(text)
+    settings = config["weekly_dashboard"]["management"]
     if path.suffix.lower() == ".xlsx":
         frame = pd.read_excel(path)
     else:
-        frame = _read_csv_with_encodings(path, ("utf-8-sig", "cp932", "utf-8"))
+        frame = None
+        errors: list[str] = []
+        aliases = settings["column_aliases"]
+        required_aliases = {candidate for values in aliases.values() for candidate in values}
+        for skiprows in range(int(settings.get("header_search_rows", 1))):
+            try:
+                candidate = _read_csv_with_encodings(
+                    path, ("utf-8-sig", "cp932", "utf-8"), skiprows=skiprows
+                )
+            except ValueError as error:
+                errors.append(f"{skiprows}: {error}")
+                continue
+            if required_aliases.intersection(candidate.columns):
+                frame = candidate
+                break
+        if frame is None:
+            raise ValueError(
+                f"管理表のヘッダーを検出できません: {path} ({'; '.join(errors[-3:])})"
+            )
 
-    aliases = config["weekly_dashboard"]["management"]["column_aliases"]
+    aliases = settings["column_aliases"]
     rename: dict[str, str] = {}
     for canonical, candidates in aliases.items():
         match = next((candidate for candidate in candidates if candidate in frame.columns), None)
         if match:
             rename[match] = canonical
     frame = frame.rename(columns=rename)
+    if "purchase_cv" not in frame.columns:
+        component_columns = [
+            column
+            for column in config["weekly_dashboard"]["management"].get(
+                "purchase_cv_component_aliases", []
+            )
+            if column in frame.columns
+        ]
+        if component_columns:
+            frame["purchase_cv"] = pd.DataFrame(
+                {
+                    column: frame[column].map(lambda value: _parse_number(value) or 0)
+                    for column in component_columns
+                }
+            ).sum(axis=1)
+
     required = {"date", "cv_f", "monshin_answers", "purchase_cv"}
     missing = required - set(frame.columns)
     if missing:
@@ -272,7 +307,7 @@ def _read_management_file(path: Path, config: dict[str, Any]) -> pd.DataFrame:
     result = frame[["date", "cv_f", "monshin_answers", "purchase_cv"]].copy()
     result["date"] = pd.to_datetime(result["date"], errors="coerce")
     for column in required - {"date"}:
-        result[column] = pd.to_numeric(result[column], errors="coerce").fillna(0)
+        result[column] = result[column].map(lambda value: _parse_number(value) or 0)
     return result
 
 

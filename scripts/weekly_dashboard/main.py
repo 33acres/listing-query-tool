@@ -58,7 +58,11 @@ def main() -> int:
         / config["weekly_dashboard"]["history_root"].format(project=args.project)
     )
     history = update_history(history_path, row)
-    source_files = [ads_path, lstep_path, *sorted(input_dir.glob("management*"))]
+    management_patterns = config["weekly_dashboard"]["management"]["file_patterns"]
+    management_files = sorted(
+        {path for pattern in management_patterns for path in input_dir.glob(pattern)}
+    )
+    source_files = [ads_path, lstep_path, *management_files]
     write_outputs(output_dir, config, row, history, source_files)
     print(json.dumps(row, ensure_ascii=False, sort_keys=True))
     return 0
