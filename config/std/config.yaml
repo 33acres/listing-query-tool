@@ -17,10 +17,68 @@ drive:
   output_subfolder: "output"
   output_files:
     dashboard: "weekly_dashboard.xlsx"
-    report: "weekly_report.md"
     kpi: "weekly_kpi.csv"
     bottlenecks: "bottlenecks.csv"
     audit: "analysis_meta.json"
+    history: "funnel_history.csv"
+
+weekly_dashboard:
+  timezone: "Asia/Tokyo"
+  run_weekday: "Tuesday"
+  input_root: "output/{project}/{run_date}/raw"
+  output_root: "output/{project}/{run_date}"
+  history_root: "output/{project}/funnel_history.csv"
+  lstep:
+    header_row: 2
+    encodings: ["cp932", "utf-8-sig", "utf-8"]
+  ads:
+    encodings: ["utf-16", "utf-16le", "utf-8-sig", "cp932", "utf-8"]
+    separators: ["\t", ","]
+    header_search_rows: 5
+    column_aliases:
+      date: ["日", "日付", "年月日", "Date", "Day"]
+      clicks: ["クリック数", "クリック", "Clicks", "検索_クリック数"]
+      impressions: ["表示回数", "Impr.", "Impressions", "検索_表示回数"]
+      cost: ["費用", "Cost", "検索_費用"]
+      conversions: ["コンバージョン", "Conversions", "検索_コンバージョン"]
+      search_term: ["検索語句", "検索キーワード", "Search term"]
+    account_total_labels: ["合計: アカウント"]
+  management:
+    header_search_rows: 5
+    file_patterns:
+      - "management*.csv"
+      - "management*.xlsx"
+      - "management*.pdf"
+      - "性感染症全体管理*.csv"
+      - "性感染症全体管理*.xlsx"
+      - "性感染症全体管理*.pdf"
+    column_aliases:
+      date: ["日付", "date", "Date"]
+      gross_profit: ["垂直粗利", "gross_profit"]
+      sales: ["売上", "sales"]
+      ad_cost: ["Cost", "広告費", "ad_cost"]
+      impressions: ["IMP", "表示回数", "impressions"]
+      clicks: ["CTs", "クリック", "クリック数", "clicks"]
+      cv_f: ["CV(F)", "CV（F）", "cv_f"]
+      monshin_answers: ["問診回答", "問診回答数", "monshin_answers"]
+      purchase_cv: ["購入CV", "商品CV合計", "purchase_cv"]
+      treat_drug_cv: ["治療薬CV", "treat_drug_cv"]
+      test_light_cv: ["ライトCV", "test_light_cv"]
+      test_basic_cv: ["ベーシックCV", "test_basic_cv"]
+      test_standard_cv: ["スタンダードCV", "test_standard_cv"]
+      test_full_cv: ["フルセットCV", "test_full_cv"]
+    purchase_cv_component_aliases:
+      - "治療薬CV"
+      - "ライトCV"
+      - "ベーシックCV"
+      - "スタンダードCV"
+      - "フルセットCV"
+  funnel_stages:
+    - "ad_clicks"
+    - "line_registrations"
+    - "cv_f"
+    - "monshin_answers"
+    - "purchase_cv"
 
 flow:
   new_flow_start: "2026-04-29"
