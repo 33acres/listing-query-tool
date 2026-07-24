@@ -1,10 +1,10 @@
 # =========================================================
-# Scenario Revenue Analyzer ── STD（CUREAオンライン性病外来）
+# Scenario Revenue Analyzer ── STD（あしたのクリニック オンライン性病外来）
 # 確定値。Codexはハードコードせず本ファイルを読むこと。
 # 出典: タグ命名規則_友だち追加シナリオv1.md / 料金.md
 # =========================================================
 project: std
-display_name: CUREA オンライン性病外来
+display_name: あしたのクリニック オンライン性病外来
 
 drive:
   folder_id: "127os_AXL2Rp49yEUtRKRmyoqh7WfwN11"
@@ -16,7 +16,6 @@ drive:
     management: ["management.csv", "management.xlsx"]
   output_subfolder: "output"
   output_files:
-    dashboard: "weekly_dashboard.xlsx"
     kpi: "weekly_kpi.csv"
     bottlenecks: "bottlenecks.csv"
     audit: "analysis_meta.json"
@@ -79,6 +78,21 @@ weekly_dashboard:
     - "cv_f"
     - "monshin_answers"
     - "purchase_cv"
+
+# --- 週次ダッシュボードのGoogle Sheets同期 --------------------
+# spreadsheet_id はロールアウト時（Sheet作成後）に設定する。
+# credentials_path はサービスアカウント鍵（.gitignore済み・要作成）。
+google_sheets:
+  enabled: true
+  spreadsheet_id: ""
+  credentials_path: "credentials/gsheets_service_account.json"
+  worksheets:
+    dashboard: "Dashboard"
+    history: "History"
+    bottleneck: "Bottleneck"
+  bottleneck:
+    trailing_weeks: 4
+    threshold_pt: 2.0
 
 flow:
   new_flow_start: "2026-04-29"

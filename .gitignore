@@ -16,6 +16,16 @@
 # production
 /build
 
+# generated reports (集計レポート出力・PII非保持)
+/output/
+
+# Google Sheets service account credentials (秘密鍵・絶対にコミットしない)
+/credentials/
+
+# python
+__pycache__/
+*.pyc
+
 # misc
 .DS_Store
 *.pem

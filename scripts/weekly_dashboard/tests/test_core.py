@@ -6,8 +6,8 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
-from openpyxl import load_workbook
 
+from scripts.weekly_dashboard.bottleneck import compute_bottleneck_frame
 from scripts.weekly_dashboard.core import (
     build_history_row,
     load_config,
@@ -179,34 +179,40 @@ class IntegrationTests(unittest.TestCase):
             row = build_history_row("std", week, management, line_count)
             history_path = root / "funnel_history.csv"
 
+            def bottleneck_row_for(history: pd.DataFrame) -> dict | None:
+                frame = compute_bottleneck_frame(history, trailing_weeks=4, threshold_pt=2.0)
+                match = frame[
+                    (frame["project"] == "std") & (frame["week_start"] == row["week_start"])
+                ]
+                return match.iloc[0].to_dict() if not match.empty else None
+
             first = update_history(history_path, row)
-            write_outputs(outputs, config, row, first, sorted(inputs.iterdir()))
+            write_outputs(
+                outputs, config, row, first, sorted(inputs.iterdir()),
+                bottleneck_row=bottleneck_row_for(first),
+            )
             second = update_history(history_path, row)
-            write_outputs(outputs, config, row, second, sorted(inputs.iterdir()))
+            write_outputs(
+                outputs, config, row, second, sorted(inputs.iterdir()),
+                bottleneck_row=bottleneck_row_for(second),
+            )
 
             self.assertEqual(1, len(second))
             self.assertFalse((outputs / "weekly_report.md").exists())
+            self.assertFalse((outputs / "weekly_dashboard.xlsx").exists())
             self.assertEqual(
-                [
-                    "Dashboard",
-                    "KPI",
-                    "Weekly",
-                    "Bottlenecks",
-                    "Product",
-                    "Coupon",
-                    "Ad_Funnel",
-                    "LSTEP_Summary",
-                    "LSTEP_Scenario",
-                    "Ads_TopCost",
-                    "Meta",
-                ],
-                load_workbook(outputs / "weekly_dashboard.xlsx", read_only=True).sheetnames,
-            )
-            self.assertEqual(
-                {"weekly_dashboard.xlsx", "weekly_kpi.csv", "bottlenecks.csv",
-                 "analysis_meta.json", "funnel_history.csv"},
+                {"weekly_kpi.csv", "bottlenecks.csv", "analysis_meta.json", "funnel_history.csv"},
                 {path.name for path in outputs.iterdir()},
             )
+            # bottlenecks.csv はかつて常に空スタブだったが、今は当該週の判定結果を
+            # 1行持つ。このフィクスチャは履歴1週分のみのため段階(stage)は前週比較
+            # 不能でNaNになるが、reasonは必ず埋まる（「空でなくなった」ことの確認）。
+            bottlenecks_csv = pd.read_csv(outputs / "bottlenecks.csv")
+            self.assertEqual(1, len(bottlenecks_csv))
+            self.assertEqual(
+                row["week_start"], str(bottlenecks_csv.loc[0, "week_start"])
+            )
+            self.assertTrue(pd.notna(bottlenecks_csv.loc[0, "reason"]))
 
 
 if __name__ == "__main__":
