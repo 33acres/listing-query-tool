@@ -196,6 +196,16 @@ def read_lstep(
     selected[added_at] = pd.to_datetime(selected[added_at], errors="coerce")
     start = pd.Timestamp(week.start)
     end_exclusive = pd.Timestamp(week.end + timedelta(days=1))
+
+    min_added_at = selected[added_at].min()
+    if pd.isna(min_added_at) or pd.Timestamp(min_added_at).normalize() > start.normalize():
+        raise ValueError(
+            "LステップCSVが「全量」エクスポートになっていない可能性があります"
+            f"（データ中の最も古い友だち追加日時が {min_added_at} で、"
+            f"対象週の開始日 {week.start} より後です）。"
+            "期間指定・絞り込みをせず、全量で出力し直してください。"
+        )
+
     weekly = selected[
         (selected[added_at] >= start) & (selected[added_at] < end_exclusive)
     ].copy()
@@ -222,6 +232,12 @@ def read_ads_detail(path: Path, config: dict[str, Any]) -> pd.DataFrame:
     frame = _rename_by_aliases(frame, aliases)
     missing = {"date", "clicks"} - set(frame.columns)
     if missing:
+        if "date" in missing and "週" in frame.columns:
+            raise ValueError(
+                "広告CSVが「週」単位（週別）でエクスポートされています。"
+                "2026年7月以降の運用ルールでは「日」単位（日別）での出力が必要です。"
+                "Google広告の検索語句レポートで期間の粒度を「日」に変更して出力し直してください。"
+            )
         raise ValueError(f"広告CSVに必須列がありません: {', '.join(sorted(missing))}")
     for column in AD_COLUMNS:
         if column not in frame.columns:

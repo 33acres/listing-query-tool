@@ -13,6 +13,7 @@ from scripts.weekly_dashboard.core import (
     load_config,
     parse_management_pdf_text,
     read_ads,
+    read_ads_detail,
     read_lstep,
     read_management,
     target_week,
@@ -81,6 +82,23 @@ class LstepTests(unittest.TestCase):
             self.assertEqual(2, full_count)
             self.assertEqual(full_count, filtered_count)
 
+    def test_export_that_does_not_cover_target_week_start_raises_clear_error(self) -> None:
+        # 2026-07-09週で実際に発生した事故（絞り込みエクスポートで対象週の一部日付が
+        # 欠落し、登録数が過小算出された）の再発防止テスト。
+        with tempfile.TemporaryDirectory() as directory:
+            narrow = Path(directory) / "narrow.csv"
+            pd.DataFrame(
+                [
+                    # 対象週は 2026-07-06〜2026-07-12 だが、データは07-07から始まっており
+                    # 07-06分が欠落している(=絞り込み版の疑い)。
+                    {"友だち追加日時": "2026-07-07 00:00", "STD_決済済み": 0},
+                    {"友だち追加日時": "2026-07-12 23:59", "STD_決済済み": 1},
+                ]
+            ).to_csv(narrow, index=False, encoding="utf-8-sig")
+            week = target_week(date(2026, 7, 14))
+            with self.assertRaisesRegex(ValueError, "全量.*エクスポート"):
+                read_lstep(narrow, CONFIG, week)
+
 
 class AdsTests(unittest.TestCase):
     def test_ads_clicks_are_filtered_to_target_week(self) -> None:
@@ -97,6 +115,20 @@ class AdsTests(unittest.TestCase):
             )
             clicks = read_ads(path, CONFIG, target_week(date(2026, 7, 14)))
             self.assertEqual(30, clicks)
+
+    def test_weekly_granularity_export_raises_clear_error(self) -> None:
+        # 2026-06-30週で実際に発生した事故（2026年7月以降の運用ルール変更前の
+        # 「週」単位エクスポートが紛れ込んだ）の再発防止テスト。
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ads.csv"
+            path.write_text(
+                "Google広告レポート\n"
+                "週,検索語句,クリック数\n"
+                "2026-06-22,テスト,10\n",
+                encoding="utf-8-sig",
+            )
+            with self.assertRaisesRegex(ValueError, "週.*単位"):
+                read_ads_detail(path, CONFIG)
 
 
 class ManagementPdfTests(unittest.TestCase):
