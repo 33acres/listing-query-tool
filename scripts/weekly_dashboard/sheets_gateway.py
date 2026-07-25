@@ -142,7 +142,12 @@ class GspreadSheetsGateway:
                         "basicChart": {
                             "chartType": spec.chart_type,
                             "legendPosition": "BOTTOM_LEGEND",
-                            "headerCount": 1,
+                            # domain/seriesの範囲は呼び出し側(sheets_sync.py)で常に
+                            # ヘッダー行を含めない形（データ行から開始）で渡されるため、
+                            # headerCountは0固定。1にすると先頭の実データ行がヘッダー
+                            # 扱いされ、データ点が1行しかない場合にseriesごと消える
+                            # (Google Sheets API上で実際に発生した不具合)。
+                            "headerCount": 0,
                             "domains": [
                                 {
                                     "domain": {

@@ -84,7 +84,7 @@ weekly_dashboard:
 # credentials_path はサービスアカウント鍵（.gitignore済み・要作成）。
 google_sheets:
   enabled: true
-  spreadsheet_id: ""
+  spreadsheet_id: "1dhElVgvPl-eKCf4kDYoSGu_LGxjxY1bBJUGgDW2wC_o"
   credentials_path: "credentials/gsheets_service_account.json"
   worksheets:
     dashboard: "Dashboard"
