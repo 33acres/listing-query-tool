@@ -74,6 +74,18 @@ class ComputeBottleneckFrameTests(unittest.TestCase):
         # 回復週はWoWが改善方向（プラス）になるため、悪化ステージとしては検出されない。
         self.assertNotEqual("confirmed", recovered["bottleneck_confidence"])
 
+    def test_zero_denominator_week_does_not_crash_rolling_average(self) -> None:
+        # monshin_answers=0 の週がある場合、monshin_to_purchase_rate は0除算でNaNになる。
+        # pd.NA(pandasのnullable NA)だと後続の.rolling().mean()が例外を投げていた実バグの回帰テスト。
+        rows = [
+            _flat_week("2026-06-01", "2026-06-07"),
+            {**_flat_week("2026-06-08", "2026-06-14"), "monshin_answers": 0, "purchase_cv": 0},
+            _flat_week("2026-06-15", "2026-06-21"),
+        ]
+        result = compute_bottleneck_frame(pd.DataFrame(rows), trailing_weeks=4, threshold_pt=2.0)
+        self.assertEqual(3, len(result))
+        self.assertTrue(pd.isna(result.loc[1, "monshin_to_purchase_rate"]))
+
     def test_multiple_projects_are_computed_independently(self) -> None:
         base = [
             _flat_week("2026-06-01", "2026-06-07"),

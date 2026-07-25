@@ -123,14 +123,17 @@ def _compute_project_frame(
         }
     )
 
-    prior_clicks = group["ad_clicks"].shift(1).replace(0, pd.NA)
+    # 0除算はfloat("nan")(numpy NaN)に倒す。pd.NA(pandasのnullable NA)は
+    # .rolling().mean()が扱えず例外になるため使わない
+    # (monshin_answers=0の週が実データに存在し、実行時に踏んだ実バグ)。
+    prior_clicks = group["ad_clicks"].shift(1).replace(0, float("nan"))
     result["ad_clicks_delta_wow_pct"] = (group["ad_clicks"] - prior_clicks) / prior_clicks
 
-    avg4_clicks = _trailing_average(group["ad_clicks"], trailing_weeks).replace(0, pd.NA)
+    avg4_clicks = _trailing_average(group["ad_clicks"], trailing_weeks).replace(0, float("nan"))
     result["ad_clicks_delta_avg4_pct"] = (group["ad_clicks"] - avg4_clicks) / avg4_clicks
 
     for stage, _, numerator_col, denominator_col in MARGINAL_STAGES:
-        rate = group[numerator_col] / group[denominator_col].replace(0, pd.NA)
+        rate = group[numerator_col] / group[denominator_col].replace(0, float("nan"))
         result[f"{stage}_rate"] = rate
         result[f"{stage}_delta_wow_pt"] = rate.diff() * 100
         result[f"{stage}_delta_avg4_pt"] = (rate - _trailing_average(rate, trailing_weeks)) * 100
