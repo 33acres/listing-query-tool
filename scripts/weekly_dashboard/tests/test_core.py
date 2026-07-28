@@ -199,16 +199,16 @@ class IntegrationTests(unittest.TestCase):
             )
             pd.DataFrame(
                 [
-                    {"日付": "2026-07-06", "CV(F)": 3, "問診回答": 2, "購入CV": 1},
-                    {"日付": "2026-07-12", "CV(F)": 4, "問診回答": 3, "購入CV": 2},
+                    {"日付": "2026-07-06", "CTs": 100, "CV(F)": 3, "問診回答": 2, "購入CV": 1},
+                    {"日付": "2026-07-12", "CTs": 200, "CV(F)": 4, "問診回答": 3, "購入CV": 2},
                 ]
             ).to_csv(inputs / "management.csv", index=False, encoding="utf-8-sig")
 
             line_count, _ = read_lstep(inputs / "lstep.csv", config, week)
-            clicks = read_ads(inputs / "ads.csv", config, week)
             management = read_management(inputs, config, week)
-            management["clicks"] = clicks
             row = build_history_row("std", week, management, line_count)
+            self.assertEqual(300, row["ad_clicks"])
+            self.assertEqual(0.01, row["purchase_rate"])
             history_path = root / "funnel_history.csv"
 
             def bottleneck_row_for(history: pd.DataFrame) -> dict | None:

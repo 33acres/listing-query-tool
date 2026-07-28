@@ -384,7 +384,7 @@ def read_management(
     weekly = combined[mask]
     return {
         column: int(round(float(weekly[column].sum())))
-        for column in ("cv_f", "monshin_answers", "purchase_cv")
+        for column in ("clicks", "cv_f", "monshin_answers", "purchase_cv")
     }
 
 

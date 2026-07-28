@@ -13,7 +13,6 @@ from scripts.weekly_dashboard.bottleneck import compute_bottleneck_frame  # noqa
 from scripts.weekly_dashboard.core import (  # noqa: E402
     build_history_row,
     load_config,
-    read_ads,
     read_lstep,
     read_management,
     read_management_detail,
@@ -52,10 +51,8 @@ def main() -> int:
     ads_path = input_dir / config["drive"]["required_files"]["ads"]
     if not ads_path.is_file():
         raise FileNotFoundError(f"ads.csvが見つかりません: {ads_path}")
-    ad_clicks = read_ads(ads_path, config, week)
     management = read_management(input_dir, config, week)
     management_detail = read_management_detail(input_dir, config)
-    management["clicks"] = ad_clicks
     row = build_history_row(args.project, week, management, line_registrations)
 
     history_path = args.history_file or (
