@@ -148,7 +148,7 @@ def _read_table_with_header_search(
                         skiprows=skiprows,
                         low_memory=False,
                     )
-                except (UnicodeDecodeError, pd.errors.ParserError) as error:
+                except (UnicodeDecodeError, pd.errors.ParserError, pd.errors.EmptyDataError) as error:
                     errors.append(f"{encoding}/{separator!r}/{skiprows}: {error}")
                     continue
                 if required_aliases.intersection(candidate.columns):
