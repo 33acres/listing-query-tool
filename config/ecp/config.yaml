@@ -1,0 +1,176 @@
+# =========================================================
+# Scenario Revenue Analyzer ── ECP（緊急避妊薬）
+# 確定値。Codexはハードコードせず本ファイルを読むこと。
+# 出典: ECP/tag.md, ECP/docs/タグ命名規則_友だち追加シナリオv1.md,
+#       ECP/ブラッシュアップ版シナリオ_v1.md
+#
+# ⚠️ このファイルはSTDのconfig.yamlを土台にした初期ドラフトです。
+# ECPの実データ（lstep.csv / ads.csv / management）がまだ存在しないため、
+# 「要確認」と書いた箇所は初回の実データ取り込み時に必ず見直してください
+# （STDのconfigも同様の手順で実データに合わせて調整された経緯があります）。
+# =========================================================
+project: ecp
+display_name: あしたのクリニック オンラインECP（緊急避妊薬）外来
+
+drive:
+  # ⚠️要確認: 実際のGoogle DriveフォルダID・URL（今回新規作成した仮のフォルダ）
+  folder_id: "13PMNhi75Jv97dzMtB2uBwhwG_roOw73J"
+  folder_url: "https://drive.google.com/drive/folders/13PMNhi75Jv97dzMtB2uBwhwG_roOw73J"
+  weekly_subfolder: "weekly"
+  required_files:
+    ads: "ads.csv"
+    lstep: "lstep.csv"
+    management: ["management.csv", "management.xlsx"]
+  output_subfolder: "output"
+  output_files:
+    kpi: "weekly_kpi.csv"
+    bottlenecks: "bottlenecks.csv"
+    audit: "analysis_meta.json"
+    history: "funnel_history.csv"
+
+weekly_dashboard:
+  timezone: "Asia/Tokyo"
+  run_weekday: "Tuesday"
+  input_root: "output/{project}/{run_date}/raw"
+  output_root: "output/{project}/{run_date}"
+  history_root: "output/{project}/funnel_history.csv"
+  lstep:
+    # ⚠️要確認: STDと同じ「1行目タイトル・2行目ヘッダー」形式である前提。
+    # ECPの実エクスポートを見て違えば header_row を調整する。
+    header_row: 2
+    encodings: ["cp932", "utf-8-sig", "utf-8"]
+  ads:
+    # STD/dayvigoと同じGoogle広告エクスポート形式を前提（日別・タブ区切り）。
+    encodings: ["utf-16", "utf-16le", "utf-8-sig", "cp932", "utf-8"]
+    separators: ["\t", ","]
+    header_search_rows: 5
+    column_aliases:
+      date: ["日", "日付", "年月日", "Date", "Day"]
+      clicks: ["クリック数", "クリック", "Clicks", "検索_クリック数"]
+      impressions: ["表示回数", "Impr.", "Impressions", "検索_表示回数"]
+      cost: ["費用", "Cost", "検索_費用"]
+      conversions: ["コンバージョン", "Conversions", "検索_コンバージョン"]
+      search_term: ["検索語句", "検索キーワード", "Search term"]
+    account_total_labels: ["合計: アカウント"]
+  management:
+    # ⚠️要確認: ECPの週次管理表がまだ存在しないため、列名はSTDの構造を踏襲した
+    # 推測値。実ファイルが来たら purchase_cv_component_aliases を実際の列名に置き換える。
+    header_search_rows: 5
+    file_patterns:
+      - "management*.csv"
+      - "management*.xlsx"
+      - "management*.pdf"
+      - "ECP全体管理*.csv"
+      - "ECP全体管理*.xlsx"
+      - "ECP全体管理*.pdf"
+    column_aliases:
+      date: ["日付", "date", "Date"]
+      gross_profit: ["垂直粗利", "gross_profit"]
+      sales: ["売上", "sales"]
+      ad_cost: ["Cost", "広告費", "ad_cost"]
+      impressions: ["IMP", "表示回数", "impressions"]
+      clicks: ["CTs", "クリック", "クリック数", "clicks"]
+      cv_f: ["CV(F)", "CV（F）", "cv_f"]
+      monshin_answers: ["問診回答", "問診回答数", "monshin_answers"]
+      purchase_cv: ["購入CV", "商品CV合計", "purchase_cv"]
+      # ⚠️要確認: 以下4商品の列名は未確認の推測値
+      a72_1_cv: ["72時間1回分CV", "a72_1_cv"]
+      a72_2_cv: ["72時間2回分CV", "a72_2_cv"]
+      a120_1_cv: ["120時間1回分CV", "a120_1_cv"]
+      a120_2_cv: ["120時間2回分CV", "a120_2_cv"]
+    purchase_cv_component_aliases:
+      - "72時間1回分CV"
+      - "72時間2回分CV"
+      - "120時間1回分CV"
+      - "120時間2回分CV"
+  funnel_stages:
+    - "ad_clicks"
+    - "line_registrations"
+    - "cv_f"
+    - "monshin_answers"
+    - "purchase_cv"
+
+# --- 週次ダッシュボードのGoogle Sheets同期 --------------------
+# STDと同じサービスアカウント鍵を共用（今回作成したECP専用Sheetに共有済み）。
+google_sheets:
+  enabled: true
+  spreadsheet_id: "11nLoHF_mY4xm8Z84e8BGC9watvUMFH7mGetop2oAR4o"
+  credentials_path: "credentials/gsheets_service_account.json"
+  worksheets:
+    dashboard: "Dashboard"
+    history: "History"
+    bottleneck: "Bottleneck"
+  bottleneck:
+    trailing_weeks: 4
+    threshold_pt: 2.0
+
+column_mapping:
+  user_id: "ID"
+  mark: "対応マーク"
+  added_at: "友だち追加日時"
+  last_action_at: "最終アクション日"
+  applied_via_step: "受診経由STEP"
+
+# --- 分岐結果タグ（診断チャットボットの最終判定）--------------
+# STDのbranch_tags(treat/test)は2択だが、ECPは4択（処方可2種+処方不可2種）。
+# funnel.ts的な「started」概念はこの新パイプラインには存在しないため
+# （5段ファネルはlstep tagではなく管理表由来のcv_f/monshin_answers/purchase_cvで
+# 計算される）、4択のままで問題なくconfig側の変更のみで完結する。
+branch_tags:
+  ok_72_120: "ECP_処方可_72h120h"
+  ok_120_only: "ECP_処方可_120hのみ"
+  ng_minor: "ECP_処方不可_未成年"
+  ng_time_over: "ECP_処方不可_有効時間外"
+
+# --- CTA / STEP タグ（追記式）------------------------------
+tags:
+  step1: "ECP_診察誘導_STEP1"
+  step2: "ECP_診察誘導_STEP2"
+  step3: "ECP_診察誘導_STEP3"
+  step4: "ECP_診察誘導_STEP4"
+  step5: "ECP_診察誘導_STEP5"
+  step6: "ECP_診察誘導_STEP6"
+  shina_read: "ECP_シナ読了_対象"
+
+# --- ステータス計測 -------------------------------------------
+# STD/dayvigoと異なり、ECPは診察完了(shinsatsu_done)を計測できる設計になっている。
+status_tags:
+  paid: "ECP_決済済み"
+  monshin_submitted: "ECP_問診票提出済み"
+  shinsatsu_done: "ECP_診察完了"
+  shipped: "ECP_発送済み"
+status_notes:
+  paid: "ECP_決済済みタグから導出"
+  monshin_submitted: "ECP_問診票提出済みタグから導出"
+  shinsatsu_done: "ECP_診察完了タグから導出（STD/dayvigoと異なり計測可能）"
+  shipped: "ECP_発送済みタグから導出"
+
+# --- クリックタグ（CVR分析用・購入確定ではない）--------------
+# ⚠️現行のscripts/weekly_dashboardパイプラインはこのブロックを未参照。
+# 将来クリック→購入の歩留り分析を追加する際の設定置き場として先行定義のみ。
+click_tags:
+  a72_1: "ECP_事前決済クリック_72時間1回分"
+  a72_2: "ECP_事前決済クリック_72時間2回分"
+  a120_1: "ECP_事前決済クリック_120時間1回分"
+  a120_2: "ECP_事前決済クリック_120時間2回分"
+
+# --- 購入タグ（実購入確定）-----------------------------------
+# ⚠️重要: tokushikai.shop決済システム→Lステップへの購入確定タグ自動付与
+# （Webhook連携）が実装されるまで、このタグは発火せず購入CV・売上・粗利は
+# 計測できない（クリック数までしか追えない）。ECP/docs/タグ命名規則...md にも
+# 明記されている既知の制約。コードの問題ではなく運用連携待ち。
+purchase_tags:
+  a72_1: "ECP_購入_72時間1回分"
+  a72_2: "ECP_購入_72時間2回分"
+  a120_1: "ECP_購入_120時間1回分"
+  a120_2: "ECP_購入_120時間2回分"
+
+# --- 単価（税込・確定。出典: ECP/ブラッシュアップ版シナリオ_v1.md）-----------
+# 現行パイプラインコードは未参照（将来の粗利計算用に確定値のみ記録）。
+pricing:
+  a72_1: 8800    # 72時間用 1回分
+  a72_2: 15840   # 72時間用 2回分（薬代10%OFF）
+  a120_1: 13750  # 120時間用 1回分
+  a120_2: 24750  # 120時間用 2回分（薬代10%OFF）
+system_fee: 2200   # システム利用料（別途）
+shipping_fee: 1000 # 送料（別途）

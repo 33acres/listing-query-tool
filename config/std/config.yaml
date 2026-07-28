@@ -1,0 +1,196 @@
+# =========================================================
+# Scenario Revenue Analyzer ── STD（あしたのクリニック オンライン性病外来）
+# 確定値。Codexはハードコードせず本ファイルを読むこと。
+# 出典: タグ命名規則_友だち追加シナリオv1.md / 料金.md
+# =========================================================
+project: std
+display_name: あしたのクリニック オンライン性病外来
+
+drive:
+  folder_id: "127os_AXL2Rp49yEUtRKRmyoqh7WfwN11"
+  folder_url: "https://drive.google.com/drive/folders/127os_AXL2Rp49yEUtRKRmyoqh7WfwN11"
+  weekly_subfolder: "weekly"
+  required_files:
+    ads: "ads.csv"
+    lstep: "lstep.csv"
+    management: ["management.csv", "management.xlsx"]
+  output_subfolder: "output"
+  output_files:
+    kpi: "weekly_kpi.csv"
+    bottlenecks: "bottlenecks.csv"
+    audit: "analysis_meta.json"
+    history: "funnel_history.csv"
+
+weekly_dashboard:
+  timezone: "Asia/Tokyo"
+  run_weekday: "Tuesday"
+  input_root: "output/{project}/{run_date}/raw"
+  output_root: "output/{project}/{run_date}"
+  history_root: "output/{project}/funnel_history.csv"
+  lstep:
+    header_row: 2
+    encodings: ["cp932", "utf-8-sig", "utf-8"]
+  ads:
+    encodings: ["utf-16", "utf-16le", "utf-8-sig", "cp932", "utf-8"]
+    separators: ["\t", ","]
+    header_search_rows: 5
+    column_aliases:
+      date: ["日", "日付", "年月日", "Date", "Day"]
+      clicks: ["クリック数", "クリック", "Clicks", "検索_クリック数"]
+      impressions: ["表示回数", "Impr.", "Impressions", "検索_表示回数"]
+      cost: ["費用", "Cost", "検索_費用"]
+      conversions: ["コンバージョン", "Conversions", "検索_コンバージョン"]
+      search_term: ["検索語句", "検索キーワード", "Search term"]
+    account_total_labels: ["合計: アカウント"]
+  management:
+    header_search_rows: 5
+    file_patterns:
+      - "management*.csv"
+      - "management*.xlsx"
+      - "management*.pdf"
+      - "性感染症全体管理*.csv"
+      - "性感染症全体管理*.xlsx"
+      - "性感染症全体管理*.pdf"
+    column_aliases:
+      date: ["日付", "date", "Date"]
+      gross_profit: ["垂直粗利", "gross_profit"]
+      sales: ["売上", "sales"]
+      ad_cost: ["Cost", "広告費", "ad_cost"]
+      impressions: ["IMP", "表示回数", "impressions"]
+      clicks: ["CTs", "クリック", "クリック数", "clicks"]
+      cv_f: ["CV(F)", "CV（F）", "cv_f"]
+      monshin_answers: ["問診回答", "問診回答数", "monshin_answers"]
+      purchase_cv: ["購入CV", "商品CV合計", "purchase_cv"]
+      treat_drug_cv: ["治療薬CV", "treat_drug_cv"]
+      test_light_cv: ["ライトCV", "test_light_cv"]
+      test_basic_cv: ["ベーシックCV", "test_basic_cv"]
+      test_standard_cv: ["スタンダードCV", "test_standard_cv"]
+      test_full_cv: ["フルセットCV", "test_full_cv"]
+    purchase_cv_component_aliases:
+      - "治療薬CV"
+      - "ライトCV"
+      - "ベーシックCV"
+      - "スタンダードCV"
+      - "フルセットCV"
+  funnel_stages:
+    - "ad_clicks"
+    - "line_registrations"
+    - "cv_f"
+    - "monshin_answers"
+    - "purchase_cv"
+
+# --- 週次ダッシュボードのGoogle Sheets同期 --------------------
+# spreadsheet_id はロールアウト時（Sheet作成後）に設定する。
+# credentials_path はサービスアカウント鍵（.gitignore済み・要作成）。
+google_sheets:
+  enabled: true
+  spreadsheet_id: "1dhElVgvPl-eKCf4kDYoSGu_LGxjxY1bBJUGgDW2wC_o"
+  credentials_path: "credentials/gsheets_service_account.json"
+  worksheets:
+    dashboard: "Dashboard"
+    history: "History"
+    bottleneck: "Bottleneck"
+  bottleneck:
+    trailing_weeks: 4
+    threshold_pt: 2.0
+
+flow:
+  new_flow_start: "2026-04-29"
+
+ingest:
+  encoding: auto
+  source: lstep_friends
+
+drop_pii:
+  - "表示名"
+
+column_mapping:
+  user_id: "ID"
+  mark: "対応マーク"
+  added_at: "友だち追加日時"
+  last_action_at: "最終アクション日"
+  applied_via_step: "申込経由STEP"
+
+# --- STEP0分岐タグ ------------------------------------------
+branch_tags:
+  treat: "STEP0_治療希望"       # 申込フローへ
+  test: "STEP0_検査希望"        # 検査キットシナリオへ（STEP1-6から除外）
+
+# --- CTA / STEP タグ（追記式）------------------------------
+tags:
+  step0a: "診察誘導_STEP0A"
+  step1: "診察誘導_STEP1"
+  step2: "診察誘導_STEP2"
+  step3: "診察誘導_STEP3"
+  step4: "診察誘導_STEP4"
+  step5: "診察誘導_STEP5"
+  step6: "診察誘導_STEP6"
+  faq1: "診察誘導_FAQ1"
+  faq2: "診察誘導_FAQ2"
+  shina_read: "シナ読了_対象"    # STEP6到達・未決済（再アプローチ）
+
+# --- ステータス計測（2026-06-14 新タグ運用反映）-------------
+status_tags:
+  paid: "STD_決済済み"
+  monshin_submitted: "STD_問診票提出済み"
+  shipped: "STD_発送済み"
+status_availability:
+  paid: derived
+  monshin_submitted: derived
+  shinsatsu_done: unavailable
+  shipped: derived
+  needs_follow: derived
+status_available_from:
+  monshin_submitted: "2026-06-14"
+  shipped: "2026-06-14"
+  needs_follow: "2026-06-14"
+status_notes:
+  paid: "STD_決済済みタグ・購入後の商品タグから導出"
+  monshin_submitted: "STD_問診票提出済みタグから導出（2026-06-14運用開始）"
+  shinsatsu_done: "診察完了シナリオにアクション設定がないため未計測"
+  shipped: "STD_発送済みタグから導出（2026-06-14運用開始）"
+  needs_follow: "決済済みかつ問診票未提出として導出（2026-06-14運用開始）"
+status_rules:
+  shipped_marks: []
+  needs_follow_mode: paid_without_monshin
+
+# --- 購入タグ（2026-06-13 Lステップ発火履歴で確認）----------
+purchase_tags:
+  treat_drug: "性感染症治療薬"
+  test_full: "フルセット"
+  test_standard: "スタンダードセット"
+  test_basic: "ベーシックセット"
+  test_light: "ライトセット"
+
+# --- 単価（税込・確定）。原価判明＝粗利算出可（将来）---------
+pricing:
+  treat_drug: 8140              # 性病治療薬（ジスロマック等）
+  test_full: 28000              # 女性10項目 / 男性10項目
+  test_standard: 19000          # 女性8項目 / 男性7項目
+  test_basic: 15000             # 女性6項目 / 男性5項目
+  test_light: 9900              # 女性2項目 / 男性2項目
+cost:                           # 原価(税込)・粗利計算用（将来）
+  treat_drug: 1034
+  test_female_10: 8309
+  test_female_8: 6527
+  test_female_6: 5367
+  test_female_2: 4049
+  test_male_10: 8309
+  test_male_7: 6587
+  test_male_5: 5367
+  test_male_2: 4049
+  shipping: 310
+  packaging: 20
+  payment_fee_rate: 0.0265      # VISA/MASTER 2.65%
+
+# --- 評価対象シナリオ --------------------------------------
+scenarios:
+  - "【登録時】新フロー対応 友だち追加シナリオ（2026/05/27）_登録直後・15分後"
+  - "新フロー対応 友だち追加シナリオ（2026/05/27）_時刻指定21時"
+
+ads:
+  source: google_ads
+  protected_words: ["指名"]
+
+scoring:
+  scenario: { cvr: 35, ctr: 20, revenue: 25, cv_speed: 10, block: 0 }
