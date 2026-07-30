@@ -21,11 +21,15 @@ import pandas as pd
 import yaml
 from pypdf import PdfReader
 
+from scripts.daily_kpi.management_pdf import LAYOUTS as PDF_LAYOUTS
+from scripts.daily_kpi.management_pdf import (
+    parse_management_pdf_text as parse_ecp_management_pdf_text,
+)
 from scripts.weekly_dashboard.core import (
     PII_PATTERNS,
     _parse_number,
     _rename_by_aliases,
-    parse_management_pdf_text,
+    parse_management_pdf_text as parse_std_management_pdf_text,
 )
 
 # 管理表から日次で持ち回る列（date以外はすべて数値）
@@ -84,6 +88,11 @@ def resolve_paths(
 
 
 # --- 管理表 ---------------------------------------------------------------
+
+
+def _pdf_text(path: Path) -> str:
+    reader = PdfReader(str(path))
+    return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
 def _read_management_csv(path: Path, header_row: int) -> pd.DataFrame:
@@ -213,20 +222,22 @@ def _read_management_file(
     pdf_layout: str | None,
 ) -> pd.DataFrame:
     if path.suffix.lower() == ".pdf":
-        # parse_management_pdf_text はSTDの管理表の列順に合わせた位置決め実装
-        # （values[6]=CTs, values[9]=CV(F) …）。列構成が違う診療科のPDFに当てると
-        # 数字がずれたまま黙って通ってしまうため、検証済みレイアウトのみ許可する。
-        if pdf_layout != "std":
+        # 管理表PDFは診療科ごとに列構成が違う。列順を決め打ちした実装を別の
+        # 診療科に当てると数値がずれたまま黙って通るため、検証済みレイアウト名を
+        # configで明示させる（未指定なら失敗させる）。
+        if pdf_layout == "std":
+            # STDの列順に合わせた既存実装（商品別CV列あり）
+            frame = parse_std_management_pdf_text(_pdf_text(path))
+        elif pdf_layout in PDF_LAYOUTS:
+            frame = parse_ecp_management_pdf_text(_pdf_text(path), pdf_layout)
+        else:
             raise ValueError(
-                f"この診療科の管理表PDFは未対応です（{path.name}）。"
-                "PDFの読み取りはSTDの列順に合わせた実装のため、列構成が違う管理表に"
-                "適用すると数値がずれます。管理表はCSV（またはXLSX）でエクスポートして"
-                "ください。PDFを使う場合は config.daily_kpi.management.pdf_layout に"
-                "検証済みレイアウト名を設定してください。"
+                f"この管理表PDFのレイアウトは未検証です（{path.name}）。"
+                "PDF読み取りは列順を決め打ちするため、未検証のレイアウトに適用すると"
+                "数値がずれます。config.daily_kpi.management.pdf_layout に検証済み"
+                f"レイアウト名（{', '.join(sorted({'std', *PDF_LAYOUTS}))}）を設定するか、"
+                "管理表をCSV／XLSXでエクスポートしてください。"
             )
-        reader = PdfReader(str(path))
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        frame = parse_management_pdf_text(text)
     elif path.suffix.lower() == ".xlsx":
         frame = pd.read_excel(path, skiprows=header_row - 1)
         frame.columns = [re.sub(r"\s+", "", str(column)) for column in frame.columns]

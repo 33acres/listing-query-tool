@@ -8,6 +8,7 @@ from scripts.daily_kpi.bottleneck import (
     OUTPUT_COLUMNS,
     compute_daily_bottleneck,
     cost_band_summary,
+    cpa_band_summary,
     stage_validity,
 )
 from scripts.daily_kpi.kpi import detect_tag_activation
@@ -118,24 +119,60 @@ class ComputeDailyBottleneckTest(unittest.TestCase):
 
 
 class GuardrailTest(unittest.TestCase):
-    def test_overspend_day_raises_alert(self) -> None:
+    def test_bad_cpa_day_raises_alert(self) -> None:
         config = make_config()
         kpi = make_kpi()
-        kpi.loc[kpi.index[-1], "ad_cost"] = 700_000.0
+        kpi.loc[kpi.index[-1], "cpa"] = 13_000.0
         result = compute_daily_bottleneck(kpi, config)
 
         latest = result.iloc[-1]
         self.assertEqual(latest["alert_level"], "alert")
-        self.assertIn("出稿過多", latest["alerts"])
+        self.assertIn("CPA悪化", latest["alerts"])
 
-    def test_warn_level_for_the_warning_band(self) -> None:
+    def test_warn_level_for_the_cpa_warning_band(self) -> None:
         config = make_config()
         kpi = make_kpi()
-        kpi.loc[kpi.index[-1], "ad_cost"] = 500_000.0
+        kpi.loc[kpi.index[-1], "cpa"] = 11_800.0
         latest = compute_daily_bottleneck(kpi, config).iloc[-1]
 
         self.assertEqual(latest["alert_level"], "warn")
-        self.assertIn("出稿注意", latest["alerts"])
+        self.assertIn("CPA注意", latest["alerts"])
+
+    def test_high_spend_alone_is_not_an_alert(self) -> None:
+        """出稿額そのものは赤字と結びついていない（90日検証）ので発報しない。"""
+        config = make_config()
+        # 最終日 2026-06-29 から十分に日が経った基準日＝全日コホート成熟済み
+        kpi = make_kpi(as_of="2026-07-10")
+        kpi.loc[kpi.index[-1], "ad_cost"] = 900_000.0
+        latest = compute_daily_bottleneck(kpi, config).iloc[-1]
+
+        self.assertEqual(latest["alert_level"], "ok")
+        self.assertEqual(latest["alerts"], "")
+
+    def test_uncovered_lstep_day_is_not_reported_as_a_mismatch(self) -> None:
+        """Lステップのエクスポートが古い日は「未取得」で、データ不備ではない。"""
+        config = make_config()
+        kpi = make_kpi()
+        last = kpi.index[-1]
+        kpi.loc[last, "lstep_covered"] = False
+        kpi.loc[last, "registrations"] = 0.0
+        kpi.loc[last, "payment_clicks"] = 0.0
+        latest = compute_daily_bottleneck(kpi, config).iloc[-1]
+
+        self.assertIn("Lステップ未取得日", latest["alerts"])
+        self.assertNotIn("突合乖離", latest["alerts"])
+        self.assertEqual(latest["alert_level"], "warn")
+
+    def test_uncovered_days_do_not_drag_cohort_stages_down(self) -> None:
+        config = make_config()
+        kpi = make_kpi()
+        for index in kpi.index[-2:]:
+            kpi.loc[index, "lstep_covered"] = False
+            kpi.loc[index, "registrations"] = 0.0
+            kpi.loc[index, "payment_clicks"] = 0.0
+        latest = compute_daily_bottleneck(kpi, config).iloc[-1]
+
+        self.assertAlmostEqual(latest["cvf_to_payment_click_delta_pt"], 0.0, places=6)
 
     def test_negative_gross_profit_raises_alert(self) -> None:
         config = make_config()
@@ -158,8 +195,8 @@ class GuardrailTest(unittest.TestCase):
         self.assertEqual(latest["alert_level"], "warn")
 
 
-class CostBandSummaryTest(unittest.TestCase):
-    def test_bands_split_by_daily_spend(self) -> None:
+class BandSummaryTest(unittest.TestCase):
+    def test_cost_bands_split_by_daily_spend(self) -> None:
         kpi = make_kpi(days=10, ad_cost=200_000)
         kpi.loc[kpi.index[:3], "ad_cost"] = 800_000.0
         kpi.loc[kpi.index[:3], "gross_profit"] = -30_000.0
@@ -168,11 +205,26 @@ class CostBandSummaryTest(unittest.TestCase):
         top = bands[bands["cost_band"] == "60万〜"].iloc[0]
         self.assertEqual(top["days"], 3)
         self.assertLess(top["gross_profit_per_day"], 0)
+        self.assertEqual(top["loss_days"], 3)
         low = bands[bands["cost_band"] == "〜25万"].iloc[0]
         self.assertEqual(low["days"], 7)
+        self.assertEqual(low["loss_days"], 0)
+
+    def test_cpa_bands_split_by_cpa(self) -> None:
+        kpi = make_kpi(days=10)
+        kpi["cpa"] = 7_000.0
+        kpi.loc[kpi.index[:2], "cpa"] = 14_000.0
+        kpi.loc[kpi.index[:2], "gross_profit"] = -50_000.0
+        bands = cpa_band_summary(kpi)
+
+        top = bands[bands["cpa_band"] == "13千〜"].iloc[0]
+        self.assertEqual(top["days"], 2)
+        self.assertEqual(top["loss_days"], 2)
+        self.assertLess(top["gross_margin"], 0)
 
     def test_empty_input_returns_empty(self) -> None:
         self.assertTrue(cost_band_summary(pd.DataFrame()).empty)
+        self.assertTrue(cpa_band_summary(pd.DataFrame()).empty)
 
 
 if __name__ == "__main__":

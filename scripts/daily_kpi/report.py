@@ -6,7 +6,7 @@ from typing import Any
 
 import pandas as pd
 
-from scripts.daily_kpi.bottleneck import cost_band_summary
+from scripts.daily_kpi.bottleneck import cost_band_summary, cpa_band_summary
 from scripts.daily_kpi.kpi import ALL_STAGES, STAGES
 
 _DAILY_TABLE_COLUMNS: list[tuple[str, str, str]] = [
@@ -169,31 +169,54 @@ def _stage_section(bottleneck: pd.DataFrame, validity: dict[str, dict[str, Any]]
     )
 
 
-def _cost_band_section(kpi: pd.DataFrame) -> str:
-    bands = cost_band_summary(kpi)
-    if bands.empty:
-        return ""
-    rows = [
+def _band_rows(bands: pd.DataFrame, band_column: str) -> list[list[str]]:
+    return [
         [
-            str(row["cost_band"]),
+            str(row[band_column]),
             _format(row["days"], "int"),
+            f"{int(row['loss_days'])}日",
             _format(row["click_to_cvf"], "pct"),
             _format(row["cvf_to_purchase"], "pct"),
             _format(row["cpa"], "yen"),
+            _format(row["gross_margin"], "pct"),
             _format(row["gross_profit_per_day"], "yen"),
         ]
         for _, row in bands.iterrows()
     ]
+
+
+_BAND_HEADER = ["帯", "日数", "赤字日", "ク→登録", "登録→購入", "CPA", "粗利率", "垂直粗利/日"]
+
+
+def _cpa_band_section(kpi: pd.DataFrame) -> str:
+    bands = cpa_band_summary(kpi)
+    if bands.empty:
+        return ""
     return "\n".join(
         [
-            "## 日次Cost帯別（1日いくらまで出して良いか）",
+            "## 実CPA帯別（赤字がどこから始まるか）",
             "",
-            _markdown_table(
-                rows,
-                ["日次Cost帯", "日数", "ク→登録", "登録→購入", "CPA", "垂直粗利/日"],
-            ),
+            _markdown_table(_band_rows(bands, "cpa_band"), _BAND_HEADER),
             "",
-            "出稿を増やしても「ク→登録」はほぼ動かず、「登録→購入」が落ちる帯が出稿上限。",
+            "客単が13,000〜14,000円なので、CPAが客単に迫ると原価分だけ赤字になる。"
+            "**赤字の予兆はCPAで見る**（出稿額ではない・下記参照）。",
+        ]
+    )
+
+
+def _cost_band_section(kpi: pd.DataFrame) -> str:
+    bands = cost_band_summary(kpi)
+    if bands.empty:
+        return ""
+    return "\n".join(
+        [
+            "## 日次Cost帯別（参考）",
+            "",
+            _markdown_table(_band_rows(bands, "cost_band"), _BAND_HEADER),
+            "",
+            "出稿を増やすと「登録→購入」とCPAは悪化するが、**出稿額そのものは赤字と"
+            "結びついていない**（高出稿でも量で粗利が出る帯がある）。出稿上限の根拠には"
+            "使えないので、判断は上のCPA帯で行うこと。",
         ]
     )
 
@@ -233,16 +256,26 @@ def _conflict_section(conflicts: pd.DataFrame) -> str:
 
 
 def _reconcile_section(kpi: pd.DataFrame) -> str:
-    total_cvf = float(kpi["cv_f"].sum())
-    total_reg = float(kpi["registrations"].sum())
-    mismatched = kpi[~kpi["reconciled"].fillna(False).astype(bool)]
+    covered = kpi[kpi["lstep_covered"].fillna(True).astype(bool)] if "lstep_covered" in kpi else kpi
+    uncovered = kpi[~kpi["lstep_covered"].fillna(True).astype(bool)] if "lstep_covered" in kpi else kpi.iloc[0:0]
+    total_cvf = float(covered["cv_f"].sum())
+    total_reg = float(covered["registrations"].sum())
+    mismatched = covered[~covered["reconciled"].fillna(False).astype(bool)]
     lines = [
         "## 突合（管理表 × Lステップ）",
         "",
-        f"- 期間合計: 管理表CV(F) {total_cvf:,.0f} 件 / Lステップ友だち追加 {total_reg:,.0f} 件"
-        f"（差 {total_reg - total_cvf:+,.0f} 件）",
-        f"- 許容乖離を超えた日: {len(mismatched)} 日 / {len(kpi)} 日",
+        f"- 突合できた期間（{len(covered)}日）合計: 管理表CV(F) {total_cvf:,.0f} 件 / "
+        f"Lステップ友だち追加 {total_reg:,.0f} 件（差 {total_reg - total_cvf:+,.0f} 件）",
+        f"- 許容乖離を超えた日: {len(mismatched)} 日 / {len(covered)} 日",
     ]
+    if not uncovered.empty:
+        first = pd.Timestamp(uncovered["date"].min()).strftime("%Y-%m-%d")
+        last = pd.Timestamp(uncovered["date"].max()).strftime("%Y-%m-%d")
+        lines.append(
+            f"- ⚠️ Lステップ未取得日: {len(uncovered)} 日（{first} 〜 {last}）。"
+            "管理表のほうが新しいため、この期間のコホート指標（②③・処方不可率）は空欄。"
+            "Lステップを再エクスポートすれば埋まる"
+        )
     if not mismatched.empty:
         lines += [
             "",
@@ -301,6 +334,8 @@ def build_report(
         "",
         "凡例: ①②③はファネルの隣接区間。②はLステップのコホート軸（友だち追加日基準の到達率）、"
         "③は分母コホート軸・分子当日軸の混在指標。①と通しは管理表の当日実績のみで完結する。",
+        "",
+        _cpa_band_section(kpi),
         "",
         _cost_band_section(kpi),
         "",

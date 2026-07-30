@@ -83,8 +83,20 @@ def main() -> int:
     management = dedupe_management(management_frames)
     lstep = load_lstep_frame(input_dir, config)
     lstep_daily = aggregate_lstep_daily(lstep, config)
+    # Lステップのエクスポートに現れる最終日は、その日の途中で出力されているため
+    # 必ず部分データになる（実データで7/28が67件中37件だった）。完全に覆えている
+    # のは1日前まで、と見なす。ここを最終日にすると毎回「突合乖離」が誤発報する。
+    lstep_covered_through = (
+        pd.Timestamp(lstep_daily["date"].max()) - pd.Timedelta(days=1)
+        if not lstep_daily.empty
+        else None
+    )
     kpi = build_daily_kpi(
-        management, lstep_daily, config, as_of=pd.Timestamp(args.run_date)
+        management,
+        lstep_daily,
+        config,
+        as_of=pd.Timestamp(args.run_date),
+        lstep_covered_through=lstep_covered_through,
     )
     bottleneck = compute_daily_bottleneck(kpi, config)
     validity = stage_validity(kpi, config)

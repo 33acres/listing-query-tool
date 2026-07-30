@@ -74,6 +74,7 @@ KPI_COLUMNS = [
     "cvf_registration_diff",
     "cvf_registration_diff_rate",
     "reconciled",
+    "lstep_covered",
     # 効率
     "ctr",
     "cpc",
@@ -163,6 +164,7 @@ def build_daily_kpi(
     config: dict[str, Any],
     *,
     as_of: pd.Timestamp,
+    lstep_covered_through: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """管理表の日次行を土台に、Lステップのコホート集計を左結合してKPI表を作る。
 
@@ -180,6 +182,13 @@ def build_daily_kpi(
 
     frame["weekday"] = frame["date"].dt.weekday.map(lambda index: _WEEKDAY_JA[index])
 
+    # Lステップのエクスポートがどの日まで含んでいるか。管理表のほうが新しいのは
+    # 日常的に起きるので、その日を「突合乖離」ではなく「未取得」として扱う。
+    if lstep_covered_through is None:
+        frame["lstep_covered"] = True
+    else:
+        frame["lstep_covered"] = frame["date"] <= pd.Timestamp(lstep_covered_through).normalize()
+
     # 突合: 管理表CV(F)とLステップ友だち追加数は同じものを指すはず
     frame["cvf_registration_diff"] = frame["registrations"] - frame["cv_f"]
     frame["cvf_registration_diff_rate"] = _safe_div(
@@ -189,6 +198,8 @@ def build_daily_kpi(
     frame["reconciled"] = (
         frame["cvf_registration_diff_rate"].fillna(1.0) <= tolerance
     )
+    # 未取得日は突合の合否を問わない（Lステップ側にまだデータが無いだけ）
+    frame.loc[~frame["lstep_covered"], "reconciled"] = True
 
     frame["ctr"] = _safe_div(frame["clicks"], frame["impressions"])
     frame["cpc"] = _safe_div(frame["ad_cost"], frame["clicks"])

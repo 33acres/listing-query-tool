@@ -59,8 +59,8 @@ def make_config(**overrides: Any) -> dict[str, Any]:
                 "max_plausible_rate": 1.2,
             },
             "guardrails": {
-                "daily_cost_warn": 450_000,
-                "daily_cost_alert": 600_000,
+                "cpa_warn": 11_500,
+                "cpa_alert": 12_000,
                 "min_gross_margin": 0.20,
                 "reconcile_tolerance": 0.05,
             },
@@ -114,6 +114,7 @@ def make_kpi(
     frame["cvf_registration_diff"] = frame["registrations"] - frame["cv_f"]
     frame["cvf_registration_diff_rate"] = 0.0
     frame["reconciled"] = True
+    frame["lstep_covered"] = True
     frame["ctr"] = frame["clicks"] / frame["impressions"]
     frame["cpc"] = frame["ad_cost"] / frame["clicks"]
     frame["cpa"] = frame["ad_cost"] / frame["purchase_cv"]

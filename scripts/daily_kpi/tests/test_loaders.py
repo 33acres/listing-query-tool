@@ -83,7 +83,7 @@ class ReadManagementDailyTest(unittest.TestCase):
         ]
         with self.assertRaises(ValueError) as raised:
             read_management_daily(self.input_dir, self.config)
-        self.assertIn("PDFは未対応", str(raised.exception))
+        self.assertIn("レイアウトは未検証です", str(raised.exception))
 
     def test_later_file_wins_for_the_same_date(self) -> None:
         updated = _MANAGEMENT_CSV.replace('"414,512"', '"999,999"')

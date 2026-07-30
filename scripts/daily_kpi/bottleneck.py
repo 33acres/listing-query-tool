@@ -105,6 +105,8 @@ def _stage_frames(
     denominator = pd.to_numeric(kpi[stage.denominator], errors="coerce").astype("float64")
     if stage.axis in ("cohort", "mixed"):
         keep = kpi["cohort_mature"].fillna(False).astype(bool)
+        if "lstep_covered" in kpi.columns:
+            keep = keep & kpi["lstep_covered"].fillna(False).astype(bool)
         if valid_from is not None:
             keep = keep & (kpi["date"] >= valid_from)
         numerator = _masked(numerator, keep)
@@ -144,13 +146,16 @@ def _row_alerts(row: pd.Series, guardrails: dict[str, Any]) -> tuple[str, list[s
     alerts: list[str] = []
     level = "ok"
 
-    ad_cost = float(row.get("ad_cost") or 0)
-    if ad_cost >= float(guardrails["daily_cost_alert"]):
-        alerts.append(f"出稿過多:Cost {ad_cost:,.0f}円（アラート閾値超）")
-        level = "alert"
-    elif ad_cost >= float(guardrails["daily_cost_warn"]):
-        alerts.append(f"出稿注意:Cost {ad_cost:,.0f}円（警告閾値超）")
-        level = "warn" if level == "ok" else level
+    # 赤字の予兆は出稿額ではなく実CPA（90日検証で赤字日を100%捕捉）。
+    cpa = row.get("cpa")
+    if cpa is not None and not pd.isna(cpa):
+        cpa_value = float(cpa)
+        if cpa_value >= float(guardrails["cpa_alert"]):
+            alerts.append(f"CPA悪化 {cpa_value:,.0f}円（赤字水準）")
+            level = "alert"
+        elif cpa_value >= float(guardrails["cpa_warn"]):
+            alerts.append(f"CPA注意 {cpa_value:,.0f}円")
+            level = "warn"
 
     gross_profit = float(row.get("gross_profit") or 0)
     if gross_profit < 0:
@@ -168,14 +173,19 @@ def _row_alerts(row: pd.Series, guardrails: dict[str, Any]) -> tuple[str, list[s
         alerts.append(f"粗利率低下 {float(gross_margin) * 100:.1f}%")
         level = "alert" if level == "alert" else "warn"
 
-    if not bool(row.get("reconciled", True)):
+    # Lステップのエクスポートが管理表より古い日は「乖離」ではなく「未取得」。
+    # 毎朝の運用で普通に起きるので、データ不備と区別して表示する。
+    if not bool(row.get("lstep_covered", True)):
+        alerts.append("Lステップ未取得日（管理表より古いエクスポート。再取得で解消）")
+        level = "warn" if level == "ok" else level
+    elif not bool(row.get("reconciled", True)):
         diff = row.get("cvf_registration_diff")
         alerts.append(
             f"突合乖離:Lステップ登録数−管理表CV(F)={float(diff or 0):+.0f}件"
         )
         level = "alert" if level == "alert" else "warn"
 
-    if not bool(row.get("cohort_mature", True)):
+    if bool(row.get("lstep_covered", True)) and not bool(row.get("cohort_mature", True)):
         alerts.append("コホート未成熟（Lステップ由来の到達率は確定値ではない）")
 
     return level, alerts
@@ -283,31 +293,8 @@ def compute_daily_bottleneck(kpi: pd.DataFrame, config: dict[str, Any]) -> pd.Da
     return result[OUTPUT_COLUMNS]
 
 
-def cost_band_summary(kpi: pd.DataFrame, bands: list[int] | None = None) -> pd.DataFrame:
-    """日次Cost帯ごとの歩留りと粗利。「1日いくらまで出して良いか」を出す。
-
-    出稿量を上げても広告クリック→登録はほぼ一定なのに登録→購入が崩れる、という
-    ECPの構造をそのまま表にする。
-    """
-    if kpi.empty:
-        return pd.DataFrame()
-    bands = bands or [250_000, 350_000, 450_000, 600_000]
-    labels = (
-        [f"〜{bands[0] // 10_000}万"]
-        + [
-            f"{lower // 10_000}〜{upper // 10_000}万"
-            for lower, upper in zip(bands, bands[1:])
-        ]
-        + [f"{bands[-1] // 10_000}万〜"]
-    )
-    frame = kpi.copy()
-    frame["cost_band"] = pd.cut(
-        frame["ad_cost"],
-        bins=[-float("inf"), *bands, float("inf")],
-        labels=labels,
-        ordered=True,
-    )
-    grouped = frame.groupby("cost_band", observed=False).agg(
+def _band_summary(frame: pd.DataFrame, band_column: str) -> pd.DataFrame:
+    grouped = frame.groupby(band_column, observed=False).agg(
         days=("date", "count"),
         ad_cost=("ad_cost", "sum"),
         clicks=("clicks", "sum"),
@@ -322,5 +309,55 @@ def cost_band_summary(kpi: pd.DataFrame, bands: list[int] | None = None) -> pd.D
         0, float("nan")
     )
     grouped["cpa"] = grouped["ad_cost"] / grouped["purchase_cv"].replace(0, float("nan"))
+    grouped["gross_margin"] = grouped["gross_profit"] / grouped["sales"].replace(
+        0, float("nan")
+    )
     grouped["gross_profit_per_day"] = grouped["gross_profit"] / grouped["days"]
+    grouped["loss_days"] = frame[frame["gross_profit"] < 0].groupby(
+        band_column, observed=False
+    )["date"].count()
+    grouped["loss_days"] = grouped["loss_days"].fillna(0).astype(int)
     return grouped.reset_index()
+
+
+def _cut(series: pd.Series, bands: list[int], unit: int, suffix: str) -> pd.Series:
+    labels = (
+        [f"〜{bands[0] // unit}{suffix}"]
+        + [
+            f"{lower // unit}〜{upper // unit}{suffix}"
+            for lower, upper in zip(bands, bands[1:])
+        ]
+        + [f"{bands[-1] // unit}{suffix}〜"]
+    )
+    return pd.cut(
+        series,
+        bins=[-float("inf"), *bands, float("inf")],
+        labels=labels,
+        ordered=True,
+    )
+
+
+def cost_band_summary(kpi: pd.DataFrame, bands: list[int] | None = None) -> pd.DataFrame:
+    """日次Cost帯ごとの歩留りと粗利。
+
+    ⚠️ 出稿額そのものは赤字と結びついていない（2026-05〜07の90日で検証）。この表は
+    「出稿を増やすと歩留りとCPAが悪化する」傾向を見るためのもので、出稿上限の根拠
+    としては使えない。赤字の判定は `cpa_band_summary` を見ること。
+    """
+    if kpi.empty:
+        return pd.DataFrame()
+    frame = kpi.copy()
+    frame["cost_band"] = _cut(frame["ad_cost"], bands or [250_000, 350_000, 450_000, 600_000], 10_000, "万")
+    return _band_summary(frame, "cost_band")
+
+
+def cpa_band_summary(kpi: pd.DataFrame, bands: list[int] | None = None) -> pd.DataFrame:
+    """実CPA帯ごとの損益。赤字がどこから始まるかを直接示す表。
+
+    客単が13,000〜14,000円なので、CPAが客単に迫ると原価分だけ赤字になる。
+    """
+    if kpi.empty:
+        return pd.DataFrame()
+    frame = kpi.copy()
+    frame["cpa_band"] = _cut(frame["cpa"], bands or [8_000, 10_000, 11_500, 13_000], 1_000, "千")
+    return _band_summary(frame, "cpa_band")
