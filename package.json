@@ -1,5 +1,5 @@
 {
-  "name": "listing-query-tool",
+  "name": "scenario-revenue-analyzer",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,12 +8,14 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "validate:dayvigo": "vite-node --config vitest.config.ts scripts/validateDayvigo.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "encoding-japanese": "^2.2.0",
+    "js-yaml": "^4.1.1",
     "lucide-react": "^0.511.0",
     "next": "^16.2.6",
     "papaparse": "^5.4.1",
