@@ -61,6 +61,7 @@ def make_config(**overrides: Any) -> dict[str, Any]:
             "guardrails": {
                 "cpa_warn": 11_500,
                 "cpa_alert": 12_000,
+                "daily_cost_warn": 400_000,
                 "min_gross_margin": 0.20,
                 "reconcile_tolerance": 0.05,
             },

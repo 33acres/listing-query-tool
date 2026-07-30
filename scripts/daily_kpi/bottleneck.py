@@ -146,7 +146,15 @@ def _row_alerts(row: pd.Series, guardrails: dict[str, Any]) -> tuple[str, list[s
     alerts: list[str] = []
     level = "ok"
 
-    # 赤字の予兆は出稿額ではなく実CPA（90日検証で赤字日を100%捕捉）。
+    # 運用水準からの逸脱。単日での赤字予測力は弱いが、この水準で回し続けると
+    # 登録→購入が落ちてCPAが上がる（週次13週の比較で粗利/日が2.4倍違う）。
+    ad_cost = float(row.get("ad_cost") or 0)
+    cost_warn = guardrails.get("daily_cost_warn")
+    if cost_warn is not None and ad_cost >= float(cost_warn):
+        alerts.append(f"出稿水準超過 {ad_cost:,.0f}円（この水準を続けると歩留りが落ちる）")
+        level = "warn"
+
+    # その日が赤字かどうかの判定は実CPA（90日検証で赤字日を100%捕捉）。
     cpa = row.get("cpa")
     if cpa is not None and not pd.isna(cpa):
         cpa_value = float(cpa)
@@ -155,7 +163,7 @@ def _row_alerts(row: pd.Series, guardrails: dict[str, Any]) -> tuple[str, list[s
             level = "alert"
         elif cpa_value >= float(guardrails["cpa_warn"]):
             alerts.append(f"CPA注意 {cpa_value:,.0f}円")
-            level = "warn"
+            level = "warn" if level == "ok" else level
 
     gross_profit = float(row.get("gross_profit") or 0)
     if gross_profit < 0:
@@ -338,11 +346,11 @@ def _cut(series: pd.Series, bands: list[int], unit: int, suffix: str) -> pd.Seri
 
 
 def cost_band_summary(kpi: pd.DataFrame, bands: list[int] | None = None) -> pd.DataFrame:
-    """日次Cost帯ごとの歩留りと粗利。
+    """日次Cost帯ごとの歩留りと粗利。出稿水準の意思決定に使う。
 
-    ⚠️ 出稿額そのものは赤字と結びついていない（2026-05〜07の90日で検証）。この表は
-    「出稿を増やすと歩留りとCPAが悪化する」傾向を見るためのもので、出稿上限の根拠
-    としては使えない。赤字の判定は `cpa_band_summary` を見ること。
+    ⚠️ 帯ごとの「赤字日」列だけを見て出稿額を赤字の判定に使わないこと。単日では
+    Cost高＝赤字にならない（月をまたぐと客単が違うため）。日次の合否判定は
+    `cpa_band_summary` 側で行い、この表は「どの水準で回すか」に使う。
     """
     if kpi.empty:
         return pd.DataFrame()

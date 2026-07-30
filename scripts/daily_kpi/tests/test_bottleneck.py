@@ -138,16 +138,34 @@ class GuardrailTest(unittest.TestCase):
         self.assertEqual(latest["alert_level"], "warn")
         self.assertIn("CPA注意", latest["alerts"])
 
-    def test_high_spend_alone_is_not_an_alert(self) -> None:
-        """出稿額そのものは赤字と結びついていない（90日検証）ので発報しない。"""
+    def test_high_spend_warns_but_does_not_alert(self) -> None:
+        """出稿水準の逸脱は警告。単日の赤字予測力は弱いのでalertには上げない。"""
         config = make_config()
         # 最終日 2026-06-29 から十分に日が経った基準日＝全日コホート成熟済み
         kpi = make_kpi(as_of="2026-07-10")
         kpi.loc[kpi.index[-1], "ad_cost"] = 900_000.0
         latest = compute_daily_bottleneck(kpi, config).iloc[-1]
 
+        self.assertEqual(latest["alert_level"], "warn")
+        self.assertIn("出稿水準超過", latest["alerts"])
+
+    def test_spend_within_the_operating_level_is_quiet(self) -> None:
+        config = make_config()
+        kpi = make_kpi(as_of="2026-07-10", ad_cost=280_000)
+        latest = compute_daily_bottleneck(kpi, config).iloc[-1]
+
         self.assertEqual(latest["alert_level"], "ok")
         self.assertEqual(latest["alerts"], "")
+
+    def test_bad_cpa_outranks_a_spend_warning(self) -> None:
+        config = make_config()
+        kpi = make_kpi(as_of="2026-07-10")
+        kpi.loc[kpi.index[-1], "ad_cost"] = 900_000.0
+        kpi.loc[kpi.index[-1], "cpa"] = 13_000.0
+        latest = compute_daily_bottleneck(kpi, config).iloc[-1]
+
+        self.assertEqual(latest["alert_level"], "alert")
+        self.assertIn("CPA悪化", latest["alerts"])
 
     def test_uncovered_lstep_day_is_not_reported_as_a_mismatch(self) -> None:
         """Lステップのエクスポートが古い日は「未取得」で、データ不備ではない。"""
