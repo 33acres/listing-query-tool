@@ -123,6 +123,23 @@ class MainEndToEndTest(unittest.TestCase):
             self._run()
         sync.assert_not_called()
 
+    def test_cohort_maturity_is_measured_from_the_lstep_export_date(self) -> None:
+        """後日パイプラインを回してもコホートは成熟しない。
+
+        タグの状態はエクスポート時点で凍結されている。run_dateを基準にすると
+        48時間タッチが届いていないコホートを成熟済みと誤判定する。
+        """
+        self._run()  # --run-date 2026-07-10、Lステップの最終日は 2026-07-02
+        kpi = pd.read_csv(
+            self.output_dir / self.config["daily_kpi"]["output_files"]["kpi"],
+            parse_dates=["date"],
+        )
+        july1 = kpi[kpi["date"] == pd.Timestamp("2026-07-01")].iloc[0]
+
+        # 実行日(7/10)基準なら経過9日で成熟だが、エクスポート日(7/02)基準では1日
+        self.assertEqual(july1["cohort_days_elapsed"], 1)
+        self.assertFalse(bool(july1["cohort_mature"]))
+
     def test_missing_input_directory_fails_loudly(self) -> None:
         self.input_dir.rename(self.input_dir.parent / "moved")
         with self.assertRaises(FileNotFoundError):

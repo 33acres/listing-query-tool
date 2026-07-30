@@ -86,16 +86,26 @@ def main() -> int:
     # Lステップのエクスポートに現れる最終日は、その日の途中で出力されているため
     # 必ず部分データになる（実データで7/28が67件中37件だった）。完全に覆えている
     # のは1日前まで、と見なす。ここを最終日にすると毎回「突合乖離」が誤発報する。
+    lstep_export_date = (
+        pd.Timestamp(lstep_daily["date"].max()) if not lstep_daily.empty else None
+    )
     lstep_covered_through = (
-        pd.Timestamp(lstep_daily["date"].max()) - pd.Timedelta(days=1)
-        if not lstep_daily.empty
-        else None
+        lstep_export_date - pd.Timedelta(days=1) if lstep_export_date is not None else None
+    )
+    # ⚠️ コホート成熟度の基準日は「実行日」ではなく「Lステップを出力した日」。
+    # タグの状態はエクスポート時点で凍結されているので、後日パイプラインを回しても
+    # コホートは成熟しない。run_dateを基準にすると、48時間タッチがまだ届いていない
+    # 直近コホートを「成熟済み」と誤判定する（実データで7/27のSTEP6が0%だった）。
+    as_of = (
+        min(pd.Timestamp(args.run_date), lstep_export_date)
+        if lstep_export_date is not None
+        else pd.Timestamp(args.run_date)
     )
     kpi = build_daily_kpi(
         management,
         lstep_daily,
         config,
-        as_of=pd.Timestamp(args.run_date),
+        as_of=as_of,
         lstep_covered_through=lstep_covered_through,
     )
     bottleneck = compute_daily_bottleneck(kpi, config)
