@@ -1,0 +1,244 @@
+# =========================================================
+# Scenario Revenue Analyzer ── ECP（緊急避妊薬）
+# 確定値。Codexはハードコードせず本ファイルを読むこと。
+# 出典: ECP/tag.md, ECP/docs/タグ命名規則_友だち追加シナリオv1.md,
+#       ECP/ブラッシュアップ版シナリオ_v1.md
+#
+# 2026-07-30: 実データ（2026-07-28スナップショット）で全項目を検証済み。
+# 「要確認」だった推測値は実ファイルの列名・ファイル構成に置き換えた。
+# 検証の根拠は output/ecp/2026-07-28/bottleneck_report.md を参照。
+# =========================================================
+project: ecp
+display_name: あしたのクリニック オンラインECP（緊急避妊薬）外来
+
+drive:
+  # 実運用フォルダ（2026-07-30 実ファイル存在を確認済み）
+  folder_id: "13cvQih6BLVDjfsu0OLkHIIkQy7zGuayD"
+  folder_url: "https://drive.google.com/drive/folders/13cvQih6BLVDjfsu0OLkHIIkQy7zGuayD"
+  weekly_subfolder: "weekly"
+  required_files:
+    ads: "ads.csv"
+    # ⚠️実態はlstepが友だち追加年で分割エクスポートされている
+    # （lstep2022〜2025.csv + lstep{YYYYMMDD}.csv）。日次パイプラインは
+    # daily_kpi.lstep.file_patterns のグロブで全ファイルを結合して読む。
+    # 週次パイプライン（scripts/weekly_dashboard）は単一ファイル前提のため、
+    # 週次を回す場合は最新年ファイルを lstep.csv にリネームして置くこと。
+    lstep: "lstep.csv"
+    management: ["management.csv", "management.xlsx"]
+  output_subfolder: "output"
+  output_files:
+    kpi: "weekly_kpi.csv"
+    bottlenecks: "bottlenecks.csv"
+    audit: "analysis_meta.json"
+    history: "funnel_history.csv"
+
+weekly_dashboard:
+  timezone: "Asia/Tokyo"
+  run_weekday: "Tuesday"
+  input_root: "output/{project}/{run_date}/raw"
+  output_root: "output/{project}/{run_date}"
+  history_root: "output/{project}/funnel_history.csv"
+  lstep:
+    # 実データ確認済み: 1行目がタグID・2行目がタグ名の2段ヘッダー。
+    header_row: 2
+    encodings: ["cp932", "utf-8-sig", "utf-8"]
+  ads:
+    # 実データ確認済み: ECPのads.csvはUTF-8。utf-16を先頭に置くと文字化けするため
+    # STD/dayvigoと順序を変えてある。
+    encodings: ["utf-8-sig", "utf-8", "cp932", "utf-16", "utf-16le"]
+    separators: ["\t", ","]
+    header_search_rows: 5
+    column_aliases:
+      date: ["日", "日付", "年月日", "Date", "Day"]
+      clicks: ["クリック数", "クリック", "Clicks", "検索_クリック数"]
+      impressions: ["表示回数", "Impr.", "Impressions", "検索_表示回数"]
+      cost: ["費用", "Cost", "検索_費用"]
+      conversions: ["コンバージョン", "Conversions", "検索_コンバージョン"]
+      search_term: ["検索語句", "検索キーワード", "Search term"]
+    account_total_labels: ["合計: アカウント"]
+  management:
+    # 実データ確認済み: ヘッダーは4行目（上3行は進捗・目標行）。
+    # 「クリニック粗利（未入金含む）」等は列名内に改行を含む。
+    header_search_rows: 5
+    file_patterns:
+      - "management*.csv"
+      - "management*.xlsx"
+      - "management*.pdf"
+      - "アフターピル全体管理*.csv"
+      - "アフターピル全体管理*.xlsx"
+      - "アフターピル全体管理*.pdf"
+      - "ECP全体管理*.csv"
+      - "ECP全体管理*.xlsx"
+      - "ECP全体管理*.pdf"
+    column_aliases:
+      date: ["日付", "date", "Date"]
+      gross_profit: ["垂直粗利", "gross_profit"]
+      sales: ["売上", "sales"]
+      ad_cost: ["Cost", "広告費", "ad_cost"]
+      impressions: ["IMP", "表示回数", "impressions"]
+      clicks: ["CTs", "クリック", "クリック数", "clicks"]
+      cv_f: ["CV(F)", "CV（F）", "cv_f"]
+      monshin_answers: ["問診回答", "問診回答数", "monshin_answers"]
+      # 実データ確認済み: ECPの購入確定列は「実CV」1本。STDのような商品別CV列
+      # （72時間1回分CV等）は管理表に存在しない（商品構成はLステップの
+      # 事前決済クリックタグ側でしか分からない）。
+      purchase_cv: ["実CV", "購入CV", "商品CV合計", "purchase_cv"]
+      aov: ["客単", "aov"]
+      doctor: ["担当医", "doctor"]
+    purchase_cv_component_aliases: []
+  funnel_stages:
+    # ⚠️ECPは管理表の「問診回答」が全日0（問診票を経由しないフロー）のため、
+    # STDの5段ファネルは成立しない。実測できる4段はこれ。
+    # payment_clicks はLステップの事前決済クリック4タグのユニーク数。
+    - "ad_clicks"
+    - "cv_f"
+    - "payment_clicks"
+    - "purchase_cv"
+
+# --- 日次KPI表（scripts/daily_kpi）----------------------------
+# 管理表の日次行 × Lステップのコホート集計を日付で突合し、区間別CVRの
+# 悪化を自動判定する。週次（weekly_dashboard）とは独立して動く。
+daily_kpi:
+  timezone: "Asia/Tokyo"
+  input_root: "output/{project}/{run_date}/raw"
+  output_root: "output/{project}/{run_date}"
+  history_root: "output/{project}/daily_kpi_history.csv"
+  output_files:
+    kpi: "daily_kpi.csv"
+    bottleneck: "daily_bottleneck.csv"
+    report: "daily_bottleneck_report.md"
+    audit: "daily_kpi_meta.json"
+  lstep:
+    # 年別分割エクスポートを全部拾って結合する（IDで重複排除）。
+    file_patterns: ["lstep*.csv"]
+  management:
+    header_row: 4
+    # 管理表PDFの列レイアウト。ECP専用パーサ（scripts/daily_kpi/management_pdf.py）で
+    # 読む。2026-07-30に202605/202606/202607のPDFとCSVを突合し、重複する全日・
+    # 全列で完全一致することを確認済み。
+    # PDFのレイアウトが変わった場合（例: 問診票運用開始で『問診/決済遷移率』列に
+    # 値が入り以降が1列ずれる）は、印字されたCTR・MCVRとの整合性検査で失敗する。
+    pdf_layout: "ecp"
+  # コホート成熟度: 友だち追加からこの日数が経つまでは決済クリック率などが
+  # まだ伸びるため、ボトルネック判定の対象から外す（直近日の見かけ上の急落を
+  # ボトルネックと誤認しないため）。
+  cohort_maturity_days: 3
+  detection:
+    rolling_days: 7      # 判定に使う移動平均の窓（日次単体はノイズが大きい）
+    baseline_days: 28    # 比較対象ベースライン（移動平均窓の直前n日）
+    threshold_pt: 2.0    # 悪化と見なすCVR低下幅（pt）
+    # ⚠️重要: ECPのSTEP/事前決済クリックタグは途中（2026年6月末）から全登録者に
+    # 発火するようになった。それ以前を比較対象に入れると「タグが無かっただけ」を
+    # 改善/悪化と誤判定する（実際にベースラインが198%になる事象を確認）。
+    # 各タグについて「直近まで継続して min_tag_coverage 以上の付与率がある期間」を
+    # 自動検出し、それより前の日は判定窓から除外する。
+    min_tag_coverage: 0.15   # 登録数に対するタグ付与率の下限
+    max_plausible_rate: 1.2  # 窓のCVRがこれを超えたら比較不能として無効化する
+  guardrails:
+    # --- その日が赤字かどうかの判定は「実CPA」で見る -------------------
+    # 単日Costを赤字の目安にすると外れる（Cost≥60万の17日中、赤字は2日だけ）。
+    # 90日で赤字だった12日は**すべて**実CPA 12,000円以上に入り（再現率100%）、
+    # 該当13日中12日が赤字（適合率92%）。損益分岐CPA＝客単−原価/件で、
+    # 2026-07は 12,904 − 1,089 = 11,815円。CPAがここに迫ると赤字になる。
+    cpa_warn: 11500     # 分岐CPA（約11,800円）の手前
+    cpa_alert: 12000    # 90日の赤字日を100%捕捉する水準
+    # --- そのCPAを動かしているのは「1日の出稿額」-----------------------
+    # 週次13週を日次Cost 40万円で二分すると、低出稿群の方が粗利/日が2.4倍。
+    #   低出稿(平均27.0万/日) 7週: 登録→購入 62.3% / CPA  7,172円 / 粗利 190,781円/日
+    #   高出稿(平均56.8万/日) 5週: 登録→購入 50.5% / CPA 11,187円 / 粗利  78,908円/日
+    # 6/23週→6/30週→7/07週のA-B-A（出稿倍増→戻す）でも同じ動き。
+    # 単日での赤字予測力は弱いので警告止まり。運用水準からの逸脱として出す。
+    daily_cost_warn: 400000
+    min_gross_margin: 0.20    # 粗利率がこれを下回った日はアラート
+    reconcile_tolerance: 0.05 # 管理表CV(F)とLステップ友だち追加数の許容乖離
+
+# --- 週次ダッシュボードのGoogle Sheets同期 --------------------
+# STDと同じサービスアカウント鍵を共用（今回作成したECP専用Sheetに共有済み）。
+google_sheets:
+  enabled: true
+  spreadsheet_id: "11nLoHF_mY4xm8Z84e8BGC9watvUMFH7mGetop2oAR4o"
+  credentials_path: "credentials/gsheets_service_account.json"
+  worksheets:
+    dashboard: "Dashboard"
+    history: "History"
+    bottleneck: "Bottleneck"
+    daily_kpi: "DailyKPI"
+    daily_bottleneck: "DailyBottleneck"
+  bottleneck:
+    trailing_weeks: 4
+    threshold_pt: 2.0
+
+column_mapping:
+  user_id: "ID"
+  mark: "対応マーク"
+  added_at: "友だち追加日時"
+  last_action_at: "最終アクション日"
+  applied_via_step: "受診経由STEP"
+
+# --- 分岐結果タグ（診断チャットボットの最終判定）--------------
+# STDのbranch_tags(treat/test)は2択だが、ECPは4択（処方可2種+処方不可2種）。
+# funnel.ts的な「started」概念はこの新パイプラインには存在しないため
+# （5段ファネルはlstep tagではなく管理表由来のcv_f/monshin_answers/purchase_cvで
+# 計算される）、4択のままで問題なくconfig側の変更のみで完結する。
+# ⚠️実データ確認済み（2026-07-30）: エクスポートに存在するのは処方不可2つのみ。
+# 処方可の2タグは列自体が無く、「処方可なのに買わなかった」母数は取れない。
+branch_tags:
+  ng_minor: "ECP_処方不可_未成年"
+  ng_time_over: "ECP_処方不可_有効時間外"
+branch_tags_missing:
+  ok_72_120: "ECP_処方可_72h120h"     # 列なし（Lステップ側でタグ未作成）
+  ok_120_only: "ECP_処方可_120hのみ"  # 列なし（同上）
+
+# --- CTA / STEP タグ（追記式）------------------------------
+tags:
+  step1: "ECP_診察誘導_STEP1"
+  step2: "ECP_診察誘導_STEP2"
+  step3: "ECP_診察誘導_STEP3"
+  step4: "ECP_診察誘導_STEP4"
+  step5: "ECP_診察誘導_STEP5"
+  step6: "ECP_診察誘導_STEP6"
+  shina_read: "ECP_シナ読了_対象"
+
+# --- ステータス計測 -------------------------------------------
+# ⚠️実データ確認済み（2026-07-30）: 列として存在するのは ECP_決済済み のみ。
+# しかもそれが全217,154人で0件＝一度も発火していない（決済システム→Lステップの
+# Webhook連携が未実装）。問診票提出済み・診察完了・発送済みは列自体が存在しない。
+# → 日次KPIの「購入」は管理表の実CVを正とし、Lステップ側は決済クリックまでで打ち止め。
+status_tags:
+  paid: "ECP_決済済み"
+status_tags_missing:
+  monshin_submitted: "ECP_問診票提出済み"  # 列なし
+  shinsatsu_done: "ECP_診察完了"            # 列なし
+  shipped: "ECP_発送済み"                   # 列なし
+status_notes:
+  paid: "列は存在するが全件0件。購入の個人単位紐付けは不可（集計値の突合のみ）"
+
+# --- クリックタグ（CVR分析用・購入確定ではない）--------------
+# scripts/daily_kpi はこの4タグのユニーク数を payment_clicks（決済クリック）
+# として使う。商品別の内訳（72h/120h × 1回分/2回分）もここから取る。
+click_tags:
+  a72_1: "ECP_事前決済クリック_72時間1回分"
+  a72_2: "ECP_事前決済クリック_72時間2回分"
+  a120_1: "ECP_事前決済クリック_120時間1回分"
+  a120_2: "ECP_事前決済クリック_120時間2回分"
+
+# --- 購入タグ（実購入確定）-----------------------------------
+# ⚠️重要: tokushikai.shop決済システム→Lステップへの購入確定タグ自動付与
+# （Webhook連携）が実装されるまで、このタグは発火せず購入CV・売上・粗利は
+# 計測できない（クリック数までしか追えない）。ECP/docs/タグ命名規則...md にも
+# 明記されている既知の制約。コードの問題ではなく運用連携待ち。
+purchase_tags:
+  a72_1: "ECP_購入_72時間1回分"
+  a72_2: "ECP_購入_72時間2回分"
+  a120_1: "ECP_購入_120時間1回分"
+  a120_2: "ECP_購入_120時間2回分"
+
+# --- 単価（税込・確定。出典: ECP/ブラッシュアップ版シナリオ_v1.md）-----------
+# 現行パイプラインコードは未参照（将来の粗利計算用に確定値のみ記録）。
+pricing:
+  a72_1: 8800    # 72時間用 1回分
+  a72_2: 15840   # 72時間用 2回分（薬代10%OFF）
+  a120_1: 13750  # 120時間用 1回分
+  a120_2: 24750  # 120時間用 2回分（薬代10%OFF）
+system_fee: 2200   # システム利用料（別途）
+shipping_fee: 1000 # 送料（別途）
