@@ -31,7 +31,7 @@ onemedical（CUREAオンライン外来）の運営において、Claude Code �
 
 1. **Lステップ分析** — `dayvigo/data/KPI表_20260609.xlsx`
    Lステップの「友だち情報（状況）CSV」を生データシートに貼り付けると、STEP0〜6のタグ進捗・購入タグから、月別KPI比較／対応マーク分布／ファネル分析／定期率分析／週次ログを自動生成する。
-2. **広告クエリ分析** — `~/.cursor/tool/listing-query-tool`（Next.js）
+2. **広告クエリ分析** — `~/Work/tool/listing-query-tool`（Next.js）
    Google広告の検索語句CSVをアップロードし、期間比較で各クエリを「勝ち/悪化/無駄/機会損失/新規/消滅/監視」に自動分類し、優先度スコアと推奨アクションを出力する。
 
 しかし両者は**分断**しており、「広告クエリ → LINE登録 → シナリオ反応 → CV → 売上」という一連の流れで成果を診断できていない。また案件ごとに手作業が発生し、外注に渡しにくい。
@@ -447,6 +447,15 @@ revenue-analyzer/                # 既存 listing-query-tool を母体に拡張
 
 ---
 
+## 17. 拡張機能: クリエイティブ単位実CPA分析（ECP/STD・Phase 0）
+
+`0813renewal.md`（大量CR・大量LP・大量媒体を実CVベースで管理する広告運用ツールの作り方）の方法論を、ECP/STDの2案件に適用する検討を開始した。既存の「シナリオ売上分析」（本書§F5〜F7、検索語句単位・タグ進捗の近似マッチ）とは別軸で、**クリエイティブ（広告素材）単位**の実CPAを、遷移先URLに仕込む `?ad-creative-id=〇〇` パラメータで媒体RAWDATAと実CV RAWDATAを厳密突合して可視化する機能。
+
+- 詳細仕様: `spec/クリエイティブ単位実CPA分析_要件v1.md`
+- 現状（2026-08-13）: **前提となるクリエイティブ単位のURLパラメータ運用・RAWDATA双方が未整備**。着手にはクライアント（伊藤さん等）への確認・データ整備依頼が先決のため、実装は未着手（Phase 0の要件整理のみ完了）。
+
+---
+
 ## 付録0. 実装ハンドオフ（Codex向け）
 - **詳細仕様書**: `spec/詳細仕様_v1.md` — データモデル・取込・分析ロジック・ファネル判定（案件別）・スコア式・レポート・モジュール構成・受入基準・実装順を網羅。
 - **確定config**: `config/dayvigo/config.yaml` / `config/std/config.yaml` — 列マッピング・タグ・単価・シナリオ・ステータス導出を確定値で格納。Codexはハードコードせず本configを読む。
@@ -454,6 +463,7 @@ revenue-analyzer/                # 既存 listing-query-tool を母体に拡張
 
 ## 付録A. 参照資産
 - 構想: `chapy.md`
+- クリエイティブ単位実CPA分析の方法論: `0813renewal.md`（§17参照）
 - Lステップ分析（移植元）: `dayvigo/data/KPI表_20260609.xlsx`（シート: 月別KPI/マーク分布/ファネル/定期率/週次ログ/生データ34列）
-- 広告クエリ分析（母体）: `~/.cursor/tool/listing-query-tool`（`src/lib/classifyQueries.ts`・`scoring.ts`・`aggregateQueries.ts`・`comparePeriods.ts`）
+- 広告クエリ分析（母体）: `~/Work/tool/listing-query-tool`（`src/lib/classifyQueries.ts`・`scoring.ts`・`aggregateQueries.ts`・`comparePeriods.ts`）
 - 新フロー/タグ設計/ブランド規定: `onemedical/CLAUDE.md`
